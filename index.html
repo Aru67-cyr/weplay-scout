@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="面向 Steam 的新游榜单发现与线索管理工作台" />
     <title>Scoutline - 新游线索工作台</title>
-    <link rel="stylesheet" href="styles.css?v=20260806d" />
+    <link rel="stylesheet" href="styles.css?v=20260806e" />
   </head>
   <body>
     <div class="app-shell">
@@ -307,7 +307,7 @@
             <div class="intel-toolbar">
               <div>
                 <div class="board-title-line"><span class="live-dot"></span><h2>新游资讯流</h2><span id="intelResultCount">0 条</span></div>
-                <p>汇总创作者与欧美游戏社区的新发布内容，优先标记可能的新游线索。</p>
+                <p>汇总 YouTube 欧美游戏热门、关注博主与游戏社区内容，优先标记近期新游和跨区话题。</p>
               </div>
               <div class="intel-actions">
                 <label class="intel-select">来源
@@ -318,6 +318,12 @@
                     <option value="tiktok">TikTok</option>
                   </select>
                 </label>
+                <label class="intel-select">排序
+                  <select id="intelSort">
+                    <option value="hot">YouTube 热度</option>
+                    <option value="latest">最新发布</option>
+                  </select>
+                </label>
                 <label class="radar-toggle"><input id="intelNewOnly" type="checkbox" /><span>只看新游信号</span></label>
                 <button class="button secondary" id="contentSyncButton" type="button"><i data-lucide="refresh-cw"></i><span>更新资讯</span></button>
                 <button class="button primary" id="addCreatorButton" type="button"><i data-lucide="user-plus"></i><span>添加博主</span></button>
@@ -326,7 +332,7 @@
 
             <div class="source-status-strip" id="contentSourceStrip">
               <div class="source-status-item"><span class="source-status-icon forum"><i data-lucide="messages-square"></i></span><span><strong>ResetEra 游戏头条</strong><small>正在连接公开 RSS</small></span><b class="source-state pending">连接中</b></div>
-              <div class="source-status-item"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 创作者</strong><small>添加频道后开始监控</small></span><b class="source-state pending">待配置</b></div>
+              <div class="source-status-item"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 游戏热门</strong><small>配置 API Key 后监控欧美热门视频</small></span><b class="source-state pending">待配置</b></div>
               <div class="source-status-item"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 创作者</strong><small>官方接口需要创作者授权</small></span><b class="source-state auth">需授权</b></div>
             </div>
 
@@ -334,7 +340,7 @@
             <div class="intel-empty" id="intelEmpty" hidden>
               <span><i data-lucide="inbox"></i></span>
               <strong>当前筛选下没有资讯</strong>
-              <p>换一个来源，或先添加你关注的 YouTube 频道。</p>
+              <p>换一个来源，或配置 YouTube API 后查看欧美游戏热门。</p>
             </div>
             <div class="table-footer"><span id="intelFooterSummary">等待首次资讯同步</span><span>资讯更新时间：<strong id="contentUpdatedTime">尚未同步</strong></span></div>
           </section>
@@ -384,6 +390,6 @@
 
     <div class="toast-region" id="toastRegion" aria-live="polite"></div>
     <script src="assets/lucide.min.js"></script>
-    <script src="app.js?v=20260806d"></script>
+    <script src="app.js?v=20260806e"></script>
   </body>
 </html>

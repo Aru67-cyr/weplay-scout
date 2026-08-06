@@ -410,10 +410,12 @@ tbody tr:last-child td { border-bottom: 0; }
 .intel-item-title svg { width: 13px; min-width: 13px; color: var(--ink-3); }
 .intel-item-main > p { margin: 6px 0 0; overflow: hidden; color: var(--ink-2); display: -webkit-box; font-size: 10px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .intel-item-signals { min-height: 21px; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
-.intel-signal, .intel-game-match { min-height: 21px; padding: 0 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 700; }
+.intel-signal, .intel-game-match, .intel-metric { min-height: 21px; padding: 0 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 700; }
 .intel-signal { color: var(--amber); background: var(--amber-soft); }
 .intel-game-match { color: #315d82; background: #eaf1f7; text-decoration: none; }
-.intel-signal svg, .intel-game-match svg { width: 11px; }
+.intel-metric { color: var(--ink-2); background: #eef2f0; }
+.intel-metric.regions { color: #315d82; background: #eaf1f7; }
+.intel-signal svg, .intel-game-match svg, .intel-metric svg { width: 11px; }
 .intel-empty { min-height: 300px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .intel-empty > span { width: 40px; height: 40px; border-radius: 8px; background: #eef2f0; color: var(--ink-3); display: grid; place-items: center; }
 .intel-empty svg { width: 18px; }

@@ -27,6 +27,9 @@ def configured_db_path() -> Path:
 DB_PATH = configured_db_path()
 USER_AGENT = "WePlay-Scout/1.0 (+local research dashboard)"
 RESET_ERA_FEED = "https://www.resetera.com/forums/gaming-headlines.54/index.rss"
+YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
+YOUTUBE_TRENDING_LOCATOR = "youtube:gaming-trending"
+DEFAULT_YOUTUBE_REGIONS = ("US", "GB", "FR", "DE", "IT")
 CONTENT_SYNC_LOCK = threading.Lock()
 NEW_GAME_TERMS = re.compile(
     r"\b(announce[ds]?|announcement|reveal(?:ed)?|debut|new game|first look|"
@@ -50,6 +53,20 @@ def connect() -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA journal_mode=WAL")
     return connection
+
+
+def ensure_content_columns(db: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in db.execute("PRAGMA table_info(content_items)")}
+    additions = {
+        "view_count": "INTEGER NOT NULL DEFAULT 0",
+        "like_count": "INTEGER NOT NULL DEFAULT 0",
+        "comment_count": "INTEGER NOT NULL DEFAULT 0",
+        "region_codes": "TEXT NOT NULL DEFAULT ''",
+        "discovery_type": "TEXT NOT NULL DEFAULT 'feed'",
+    }
+    for column, definition in additions.items():
+        if column not in existing:
+            db.execute(f"ALTER TABLE content_items ADD COLUMN {column} {definition}")
 
 
 def init_content_db() -> None:
@@ -101,6 +118,7 @@ def init_content_db() -> None:
             );
             """
         )
+        ensure_content_columns(db)
         db.execute(
             """
             INSERT INTO content_sources(platform, name, locator, status, created_at)
@@ -108,6 +126,18 @@ def init_content_db() -> None:
             ON CONFLICT(platform, locator) DO UPDATE SET name = excluded.name
             """,
             (RESET_ERA_FEED, iso_now()),
+        )
+        db.execute(
+            """
+            INSERT INTO content_sources(platform, name, locator, status, created_at)
+            VALUES ('youtube', 'YouTube 游戏热门', ?, ?, ?)
+            ON CONFLICT(platform, locator) DO UPDATE SET name = excluded.name
+            """,
+            (
+                YOUTUBE_TRENDING_LOCATOR,
+                "pending" if os.environ.get("YOUTUBE_API_KEY", "").strip() else "needs_key",
+                iso_now(),
+            ),
         )
     import_youtube_sources_from_env()
 
@@ -187,14 +217,16 @@ def add_content_source(platform: str, name: str, locator: str) -> dict[str, Any]
     return dict(row)
 
 
-def http_bytes(url: str, retries: int = 2) -> bytes:
+def http_bytes(url: str, retries: int = 2, headers: dict[str, str] | None = None) -> bytes:
+    request_headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/rss+xml,application/xml,application/json,text/xml,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    request_headers.update(headers or {})
     request = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/rss+xml,application/xml,application/json,text/xml,*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-        },
+        headers=request_headers,
     )
     last_error: Exception | None = None
     for attempt in range(retries + 1):
@@ -212,6 +244,40 @@ def http_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
     separator = "&" if "?" in url else "?"
     payload = http_bytes(f"{url}{separator}{urllib.parse.urlencode(params)}")
     return json.loads(payload.decode("utf-8"))
+
+
+def youtube_json(resource: str, params: dict[str, Any]) -> dict[str, Any]:
+    api_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("等待配置 YouTube API Key")
+    url = f"{YOUTUBE_API_BASE}/{resource}?{urllib.parse.urlencode(params)}"
+    payload = http_bytes(
+        url,
+        headers={
+            "Accept": "application/json",
+            "X-Goog-Api-Key": api_key,
+        },
+    )
+    return json.loads(payload.decode("utf-8"))
+
+
+def youtube_regions() -> tuple[str, ...]:
+    raw = os.environ.get("SCOUTLINE_YOUTUBE_REGIONS", "").strip()
+    values = raw.split(",") if raw else DEFAULT_YOUTUBE_REGIONS
+    regions: list[str] = []
+    for value in values:
+        code = value.strip().upper()
+        if re.fullmatch(r"[A-Z]{2}", code) and code not in regions:
+            regions.append(code)
+    return tuple(regions[:10]) or DEFAULT_YOUTUBE_REGIONS
+
+
+def youtube_max_results() -> int:
+    try:
+        configured = int(os.environ.get("SCOUTLINE_YOUTUBE_MAX_RESULTS", "20"))
+    except ValueError:
+        configured = 20
+    return max(5, min(50, configured))
 
 
 def clean_text(value: str | None, limit: int = 480) -> str:
@@ -260,45 +326,140 @@ def parse_rss(url: str) -> list[dict[str, Any]]:
     return items
 
 
-def fetch_youtube(source: sqlite3.Row) -> list[dict[str, Any]]:
-    api_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("等待配置 YouTube API Key")
+def as_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def youtube_video_item(
+    video: dict[str, Any],
+    source_name: str,
+    regions: list[str] | tuple[str, ...] = (),
+    discovery_type: str = "creator",
+) -> dict[str, Any] | None:
+    video_id = str(video.get("id") or "").strip()
+    snippet = video.get("snippet") or {}
+    title = clean_text(snippet.get("title"), 220)
+    if not video_id or not title:
+        return None
+    thumbnails = snippet.get("thumbnails") or {}
+    thumbnail = (
+        thumbnails.get("maxres")
+        or thumbnails.get("standard")
+        or thumbnails.get("high")
+        or thumbnails.get("medium")
+        or thumbnails.get("default")
+        or {}
+    ).get("url", "")
+    statistics = video.get("statistics") or {}
+    return {
+        "external_id": video_id,
+        "author": clean_text(snippet.get("channelTitle") or source_name, 120),
+        "title": title,
+        "summary": clean_text(snippet.get("description")),
+        "url": f"https://www.youtube.com/watch?v={video_id}",
+        "thumbnail": thumbnail,
+        "published_at": normalize_date(snippet.get("publishedAt")),
+        "view_count": as_int(statistics.get("viewCount")),
+        "like_count": as_int(statistics.get("likeCount")),
+        "comment_count": as_int(statistics.get("commentCount")),
+        "region_codes": ",".join(regions),
+        "discovery_type": discovery_type,
+    }
+
+
+def fetch_youtube_channel(source: sqlite3.Row) -> list[dict[str, Any]]:
     locator = source["locator"]
     channel_filter = {"forHandle": locator} if locator.startswith("@") else {"id": locator}
-    channel_payload = http_json(
-        "https://www.googleapis.com/youtube/v3/channels",
-        {"part": "snippet,contentDetails", **channel_filter, "key": api_key},
+    channel_payload = youtube_json(
+        "channels",
+        {"part": "snippet,contentDetails", **channel_filter},
     )
     channels = channel_payload.get("items") or []
     if not channels:
         raise RuntimeError("没有找到这个 YouTube 频道")
     channel = channels[0]
     playlist_id = channel["contentDetails"]["relatedPlaylists"]["uploads"]
-    payload = http_json(
-        "https://www.googleapis.com/youtube/v3/playlistItems",
-        {"part": "snippet,contentDetails", "playlistId": playlist_id, "maxResults": 20, "key": api_key},
+    playlist_payload = youtube_json(
+        "playlistItems",
+        {
+            "part": "contentDetails",
+            "playlistId": playlist_id,
+            "maxResults": youtube_max_results(),
+        },
     )
-    items: list[dict[str, Any]] = []
-    for entry in payload.get("items") or []:
-        snippet = entry.get("snippet") or {}
-        video_id = (entry.get("contentDetails") or {}).get("videoId")
-        if not video_id:
-            continue
-        thumbnails = snippet.get("thumbnails") or {}
-        thumbnail = (thumbnails.get("high") or thumbnails.get("medium") or thumbnails.get("default") or {}).get("url", "")
-        items.append(
+    video_ids = [
+        str((entry.get("contentDetails") or {}).get("videoId") or "")
+        for entry in playlist_payload.get("items") or []
+    ]
+    video_ids = [video_id for video_id in video_ids if video_id]
+    if not video_ids:
+        return []
+    videos_payload = youtube_json(
+        "videos",
+        {"part": "snippet,statistics", "id": ",".join(video_ids)},
+    )
+    items = [
+        youtube_video_item(video, source["name"], discovery_type="creator")
+        for video in videos_payload.get("items") or []
+    ]
+    return sorted(
+        (item for item in items if item),
+        key=lambda item: item["published_at"],
+        reverse=True,
+    )
+
+
+def fetch_youtube_trending(source: sqlite3.Row) -> list[dict[str, Any]]:
+    region_order = youtube_regions()
+    collected: dict[str, dict[str, Any]] = {}
+    for region in region_order:
+        payload = youtube_json(
+            "videos",
             {
-                "external_id": video_id,
-                "author": snippet.get("videoOwnerChannelTitle") or snippet.get("channelTitle") or source["name"],
-                "title": clean_text(snippet.get("title"), 220),
-                "summary": clean_text(snippet.get("description")),
-                "url": f"https://www.youtube.com/watch?v={video_id}",
-                "thumbnail": thumbnail,
-                "published_at": normalize_date(snippet.get("publishedAt")),
-            }
+                "part": "snippet,statistics",
+                "chart": "mostPopular",
+                "regionCode": region,
+                "videoCategoryId": "20",
+                "maxResults": youtube_max_results(),
+            },
         )
-    return items
+        for video in payload.get("items") or []:
+            video_id = str(video.get("id") or "")
+            if not video_id:
+                continue
+            if video_id not in collected:
+                collected[video_id] = {"video": video, "regions": []}
+            if region not in collected[video_id]["regions"]:
+                collected[video_id]["regions"].append(region)
+
+    items: list[dict[str, Any]] = []
+    for entry in collected.values():
+        item = youtube_video_item(
+            entry["video"],
+            source["name"],
+            regions=entry["regions"],
+            discovery_type="trending",
+        )
+        if item:
+            items.append(item)
+    items.sort(
+        key=lambda item: (
+            len(item["region_codes"].split(",")) if item["region_codes"] else 0,
+            item["view_count"],
+            item["published_at"],
+        ),
+        reverse=True,
+    )
+    return items[: min(100, max(30, youtube_max_results() * 3))]
+
+
+def fetch_youtube(source: sqlite3.Row) -> list[dict[str, Any]]:
+    if source["locator"] == YOUTUBE_TRENDING_LOCATOR:
+        return fetch_youtube_trending(source)
+    return fetch_youtube_channel(source)
 
 
 def known_games(db: sqlite3.Connection) -> list[tuple[int, str, str]]:
@@ -327,15 +488,30 @@ def store_items(source: sqlite3.Row, items: list[dict[str, Any]]) -> int:
             appid, game_name = match_game(item["title"], games)
             signal_text = f"{item['title']} {item['summary']}"
             existed = db.execute(
-                "SELECT 1 FROM content_items WHERE platform = ? AND external_id = ?",
+                "SELECT region_codes, discovery_type FROM content_items WHERE platform = ? AND external_id = ?",
                 (source["platform"], item["external_id"]),
             ).fetchone()
+            region_codes = str(item.get("region_codes") or "")
+            if not region_codes and existed:
+                region_codes = str(existed["region_codes"] or "")
+            discovery_types = {
+                value
+                for value in str(item.get("discovery_type") or "feed").split(",")
+                if value
+            }
+            if existed:
+                discovery_types.update(
+                    value
+                    for value in str(existed["discovery_type"] or "").split(",")
+                    if value
+                )
             db.execute(
                 """
                 INSERT INTO content_items(
                     source_id, platform, external_id, author, title, summary, url,
-                    thumbnail, published_at, fetched_at, is_new_game, matched_appid, matched_game
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    thumbnail, published_at, fetched_at, is_new_game, matched_appid, matched_game,
+                    view_count, like_count, comment_count, region_codes, discovery_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(platform, external_id) DO UPDATE SET
                     source_id = excluded.source_id,
                     author = excluded.author,
@@ -347,7 +523,12 @@ def store_items(source: sqlite3.Row, items: list[dict[str, Any]]) -> int:
                     fetched_at = excluded.fetched_at,
                     is_new_game = excluded.is_new_game,
                     matched_appid = excluded.matched_appid,
-                    matched_game = excluded.matched_game
+                    matched_game = excluded.matched_game,
+                    view_count = excluded.view_count,
+                    like_count = excluded.like_count,
+                    comment_count = excluded.comment_count,
+                    region_codes = excluded.region_codes,
+                    discovery_type = excluded.discovery_type
                 """,
                 (
                     source["id"],
@@ -363,6 +544,11 @@ def store_items(source: sqlite3.Row, items: list[dict[str, Any]]) -> int:
                     int(bool(appid) or bool(NEW_GAME_TERMS.search(signal_text))),
                     appid,
                     game_name,
+                    as_int(item.get("view_count")),
+                    as_int(item.get("like_count")),
+                    as_int(item.get("comment_count")),
+                    region_codes,
+                    ",".join(sorted(discovery_types)),
                 ),
             )
             if not existed:
@@ -448,7 +634,7 @@ def get_content_status() -> dict[str, Any]:
     return payload
 
 
-def get_content(limit: int = 100) -> dict[str, Any]:
+def get_content(limit: int = 160) -> dict[str, Any]:
     init_content_db()
     limit = max(1, min(200, int(limit)))
     with connect() as db:
@@ -470,5 +656,7 @@ def get_content(limit: int = 100) -> dict[str, Any]:
         "sources": sources,
         "updated_at": status.get("last_success_at"),
         "youtube_configured": bool(os.environ.get("YOUTUBE_API_KEY", "").strip()),
+        "youtube_regions": list(youtube_regions()),
+        "youtube_trending_locator": YOUTUBE_TRENDING_LOCATOR,
         "tiktok_mode": "creator_authorization_required",
     }

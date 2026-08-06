@@ -25,6 +25,8 @@ jobs:
       SCOUTLINE_DB_PATH: .cache/scoutline.db
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       SCOUTLINE_YOUTUBE_CHANNELS: ${{ vars.SCOUTLINE_YOUTUBE_CHANNELS }}
+      SCOUTLINE_YOUTUBE_REGIONS: ${{ vars.SCOUTLINE_YOUTUBE_REGIONS }}
+      SCOUTLINE_YOUTUBE_MAX_RESULTS: ${{ vars.SCOUTLINE_YOUTUBE_MAX_RESULTS }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6

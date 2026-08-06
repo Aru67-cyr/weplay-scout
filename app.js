@@ -263,6 +263,7 @@ const state = {
   viewMode: "list",
   intelPlatform: "all",
   intelNewOnly: false,
+  intelSort: "hot",
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -292,6 +293,8 @@ let dataHistoryDays = 0;
 let contentItems = [];
 let contentSources = [];
 let youtubeConfigured = false;
+let youtubeRegions = [];
+let youtubeTrendingLocator = "youtube:gaming-trending";
 let dataMode = "unknown";
 
 const storageKeys = {
@@ -1033,6 +1036,18 @@ function formatContentTime(value) {
   });
 }
 
+function contentRegions(item) {
+  return String(item.region_codes || "").split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+function contentHeatCompare(a, b) {
+  const regionDifference = contentRegions(b).length - contentRegions(a).length;
+  if (regionDifference) return regionDifference;
+  const viewDifference = Number(b.view_count || 0) - Number(a.view_count || 0);
+  if (viewDifference) return viewDifference;
+  return Date.parse(b.published_at || 0) - Date.parse(a.published_at || 0);
+}
+
 function sourceState(source) {
   const labels = {
     active: ["已接入", "active"],
@@ -1052,10 +1067,9 @@ function renderContentSources() {
   });
   const forum = mergedSources.find((source) => source.platform === "forum");
   const youtube = mergedSources.filter((source) => source.platform === "youtube");
+  const youtubeTrending = youtube.find((source) => source.locator === youtubeTrendingLocator);
+  const youtubeCreators = youtube.filter((source) => source.locator !== youtubeTrendingLocator);
   const tiktok = mergedSources.filter((source) => source.platform === "tiktok");
-  const youtubeState = youtube.find((source) => source.status === "active")
-    || youtube.find((source) => source.status === "error")
-    || youtube[0];
   const tiktokState = tiktok[0] || { status: "requires_auth" };
   const cards = [
     {
@@ -1066,11 +1080,11 @@ function renderContentSources() {
     },
     {
       platform: "youtube",
-      title: youtube.length ? `YouTube 创作者 · ${youtube.length} 个` : "YouTube 创作者",
-      detail: youtube.length
-        ? (youtubeConfigured ? "官方 Data API · 每日更新" : "关注名单已保存；自动采集需配置云端来源")
-        : "添加频道后开始监控",
-      state: sourceState(youtubeState || { status: youtubeConfigured ? "pending" : "needs_key" }),
+      title: `YouTube 游戏热门 · ${youtubeRegions.length || 5} 区`,
+      detail: youtubeConfigured
+        ? `官方 Data API · 每日更新${youtubeCreators.length ? ` · ${youtubeCreators.length} 个博主` : ""}`
+        : `配置 API Key 后启用${youtubeCreators.length ? ` · 已保存 ${youtubeCreators.length} 个博主` : ""}`,
+      state: sourceState(youtubeTrending || { status: youtubeConfigured ? "pending" : "needs_key" }),
     },
     {
       platform: "tiktok",
@@ -1089,12 +1103,15 @@ function renderContentSources() {
 
 function getFilteredContent() {
   const query = state.query.trim().toLowerCase();
-  return contentItems.filter((item) => {
+  const filtered = contentItems.filter((item) => {
     if (state.intelPlatform !== "all" && item.platform !== state.intelPlatform) return false;
     if (state.intelNewOnly && !item.is_new_game) return false;
-    if (query && ![item.title, item.author, item.source_name, item.matched_game].some((value) => String(value || "").toLowerCase().includes(query))) return false;
+    if (query && ![item.title, item.summary, item.author, item.source_name, item.matched_game].some((value) => String(value || "").toLowerCase().includes(query))) return false;
     return true;
   });
+  return filtered.sort(state.intelSort === "hot"
+    ? contentHeatCompare
+    : (a, b) => Date.parse(b.published_at || 0) - Date.parse(a.published_at || 0));
 }
 
 function renderContent() {
@@ -1104,6 +1121,7 @@ function renderContent() {
   $("#intelFeed").innerHTML = filtered.map((item) => {
     const articleUrl = safeExternalUrl(item.url);
     const sourceLabel = item.source_name || contentPlatformLabel(item.platform);
+    const regions = contentRegions(item);
     const summary = item.summary ? `<p>${escapeHTML(item.summary)}</p>` : "";
     const match = item.matched_appid
       ? `<a class="intel-game-match" href="https://store.steampowered.com/app/${Number(item.matched_appid)}" target="_blank" rel="noreferrer"><i data-lucide="gamepad-2"></i>${escapeHTML(item.matched_game)}<i data-lucide="external-link"></i></a>`
@@ -1111,6 +1129,12 @@ function renderContent() {
     const thumbnail = item.thumbnail
       ? `<img class="intel-thumbnail" src="${escapeHTML(safeExternalUrl(item.thumbnail))}" alt="" loading="lazy" />`
       : `<span class="intel-source-mark ${escapeHTML(item.platform)}"><i data-lucide="${contentIcon(item.platform)}"></i></span>`;
+    const metrics = [
+      regions.length ? `<span class="intel-metric regions" title="热门地区：${escapeHTML(regions.join(" / "))}"><i data-lucide="globe-2"></i>${regions.length} 区热门</span>` : "",
+      Number(item.view_count) ? `<span class="intel-metric" title="播放量"><i data-lucide="eye"></i>${formatFollowers(Number(item.view_count))}</span>` : "",
+      Number(item.like_count) ? `<span class="intel-metric" title="点赞数"><i data-lucide="thumbs-up"></i>${formatFollowers(Number(item.like_count))}</span>` : "",
+      Number(item.comment_count) ? `<span class="intel-metric" title="评论数"><i data-lucide="message-circle"></i>${formatFollowers(Number(item.comment_count))}</span>` : "",
+    ].join("");
     return `
       <article class="intel-item">
         ${thumbnail}
@@ -1118,7 +1142,7 @@ function renderContent() {
           <div class="intel-item-meta"><span>${escapeHTML(contentPlatformLabel(item.platform))}</span><strong>${escapeHTML(sourceLabel)}</strong><time>${formatContentTime(item.published_at)}</time></div>
           <a class="intel-item-title" href="${escapeHTML(articleUrl)}" target="_blank" rel="noreferrer">${escapeHTML(item.title)}<i data-lucide="external-link"></i></a>
           ${summary}
-          <div class="intel-item-signals">${item.is_new_game ? '<span class="intel-signal"><i data-lucide="sparkles"></i>新游信号</span>' : ""}${match}</div>
+          <div class="intel-item-signals">${metrics}${item.is_new_game ? '<span class="intel-signal"><i data-lucide="sparkles"></i>新游信号</span>' : ""}${match}</div>
         </div>
       </article>`;
   }).join("");
@@ -1153,6 +1177,8 @@ async function loadContentData({ waitIfRunning = true } = {}) {
     contentItems = payload.items || [];
     contentSources = payload.sources || [];
     youtubeConfigured = Boolean(payload.youtube_configured);
+    youtubeRegions = payload.youtube_regions || [];
+    youtubeTrendingLocator = payload.youtube_trending_locator || youtubeTrendingLocator;
     if (payload.updated_at) $("#contentUpdatedTime").textContent = formatContentTime(payload.updated_at);
     renderContent();
     if (dataMode === "api" && payload.running && waitIfRunning) {
@@ -1490,6 +1516,11 @@ $("#monitorForm").addEventListener("submit", (event) => {
 
 $("#intelPlatformFilter").addEventListener("change", (event) => {
   state.intelPlatform = event.target.value;
+  renderContent();
+});
+
+$("#intelSort").addEventListener("change", (event) => {
+  state.intelSort = event.target.value;
   renderContent();
 });
 
