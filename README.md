@@ -1,0 +1,63 @@
+# WePlay Scout
+
+面向 WePlay 欧美区服的新游线索工作台。网站发布在 GitHub Pages，GitHub Actions 每天采集 Steam 榜单与游戏资讯并生成静态 JSON；访问网站不需要保持任何本机程序运行。
+
+## 运行方式
+
+- GitHub Pages 托管 `index.html`、`app.js`、`styles.css` 与 `data/*.json`
+- GitHub Actions 每天新加坡时间 `03:00` 运行采集并重新发布
+- SQLite 只作为 Actions 的历史缓存，不会进入公开网站产物
+- 收藏、待跟进、监控规则与本地添加的创作者保存在浏览器 `localStorage`
+
+公开网站不包含登录、共享工作区或推送通知。需要这些能力时再接入独立后端与数据库。
+
+## 当前数据源
+
+- Steam New Releases 与 Coming Soon
+- Steam Top Sellers：14 个国家，按美服、法语服、德语服、意大利语服分组
+- Steam 类型热销：独立、动作、RPG、策略、模拟、合作、生存、恐怖，每类保留 50 款
+- Steam 当前在线人数、价格、折扣、发行日期与公开评价
+- ResetEra Gaming Headlines 公开 RSS
+- YouTube Data API 指定频道上传列表（可选）
+
+完整游戏与 Demo 都会保留，DLC、工具和原声包会排除。每日历史连续积累 7 天后，页面会展示真实的 7 日在线与评价增长。
+
+## 本地生成与预览
+
+需要 Python 3.10 或更高版本，无第三方依赖。
+
+使用已有数据库快速生成：
+
+```bash
+python3 export_static.py --skip-sync
+python3 -m http.server 4173 --directory dist
+```
+
+执行一次真实采集后生成：
+
+```bash
+python3 export_static.py
+```
+
+打开 `http://127.0.0.1:4173/`。旧的 `python3 server.py` 本地 API 模式仍保留用于调试。
+
+## GitHub Pages 发布
+
+1. 创建公开 GitHub 仓库并把本目录推送到 `main` 分支。
+2. 在仓库 `Settings > Pages` 中把 Source 设为 `GitHub Actions`。
+3. 在 `Actions` 页面手动运行一次 `Update data and deploy Pages`，之后每天自动更新。
+
+可选的 GitHub 配置：
+
+- Actions secret `YOUTUBE_API_KEY`：YouTube Data API 服务端密钥
+- Actions variable `SCOUTLINE_YOUTUBE_CHANNELS`：`显示名称|@handle,显示名称|UC频道ID`
+
+公开仓库若连续 60 天没有活动，GitHub 可能暂停定时工作流；手动运行或提交一次更新即可恢复。
+
+## 生成产物
+
+- `dist/data/games.json`：游戏、榜单、地区和趋势数据
+- `dist/data/content.json`：论坛与创作者资讯
+- `dist/data/status.json`：最近采集时间与每日计划
+
+数据库路径可通过 `SCOUTLINE_DB_PATH` 指定。GitHub Actions 使用 `.cache/scoutline.db`，该目录与 `dist/` 都已加入 `.gitignore`。

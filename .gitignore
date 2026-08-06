@@ -1,0 +1,9 @@
+.DS_Store
+.cache/
+dist/
+__pycache__/
+*.py[cod]
+data/*.db
+data/*.db-*
+data/*.db-wal
+data/*.db-shm
