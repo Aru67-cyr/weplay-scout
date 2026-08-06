@@ -63,6 +63,17 @@
           <button class="nav-item" data-source="intel" type="button">
             <i data-lucide="newspaper"></i><span>资讯监控</span><b id="contentCount">0</b>
           </button>
+          <div class="nav-subitems" id="intelSubnav" aria-label="资讯监控分类">
+            <button class="nav-subitem active" data-intel-platform="forum" type="button">
+              <i data-lucide="messages-square"></i><span>游戏资讯</span><b id="forumContentCount">0</b>
+            </button>
+            <button class="nav-subitem" data-intel-platform="youtube" type="button">
+              <i data-lucide="youtube"></i><span>YouTube 热门</span><b id="youtubeContentCount">0</b>
+            </button>
+            <button class="nav-subitem" data-intel-platform="tiktok" type="button">
+              <i data-lucide="music-2"></i><span>TikTok 创作者</span><b id="tiktokContentCount">0</b>
+            </button>
+          </div>
         </nav>
 
         <div class="sidebar-status">
@@ -306,21 +317,13 @@
           <section class="intel-section" id="intelView" hidden>
             <div class="intel-toolbar">
               <div>
-                <div class="board-title-line"><span class="live-dot"></span><h2>新游资讯流</h2><span id="intelResultCount">0 条</span></div>
-                <p>汇总 YouTube 欧美游戏热门、关注博主与游戏社区内容，优先标记近期新游和跨区话题。</p>
+                <div class="board-title-line"><span class="live-dot"></span><h2 id="intelBoardTitle">欧美游戏资讯</h2><span id="intelResultCount">0 条</span></div>
+                <p id="intelBoardDescription">追踪 ResetEra 游戏社区头条，优先标记近期新游与 Steam 对应游戏。</p>
               </div>
               <div class="intel-actions">
-                <label class="intel-select">来源
-                  <select id="intelPlatformFilter">
-                    <option value="all">全部</option>
-                    <option value="forum">社区资讯</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="tiktok">TikTok</option>
-                  </select>
-                </label>
                 <label class="intel-select">排序
                   <select id="intelSort">
-                    <option value="hot">YouTube 热度</option>
+                    <option value="hot">综合热度</option>
                     <option value="latest">最新发布</option>
                   </select>
                 </label>
@@ -331,16 +334,16 @@
             </div>
 
             <div class="source-status-strip" id="contentSourceStrip">
-              <div class="source-status-item"><span class="source-status-icon forum"><i data-lucide="messages-square"></i></span><span><strong>ResetEra 游戏头条</strong><small>正在连接公开 RSS</small></span><b class="source-state pending">连接中</b></div>
-              <div class="source-status-item"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 游戏热门</strong><small>配置 API Key 后监控欧美热门视频</small></span><b class="source-state pending">待配置</b></div>
-              <div class="source-status-item"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 创作者</strong><small>官方接口需要创作者授权</small></span><b class="source-state auth">需授权</b></div>
+              <button class="source-status-item active" data-intel-platform="forum" type="button"><span class="source-status-icon forum"><i data-lucide="messages-square"></i></span><span><strong>ResetEra 游戏头条</strong><small>正在连接公开 RSS</small></span><b class="source-state pending">连接中</b></button>
+              <button class="source-status-item" data-intel-platform="youtube" type="button"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 游戏热门</strong><small>配置 API Key 后监控欧美热门视频</small></span><b class="source-state pending">待配置</b></button>
+              <button class="source-status-item" data-intel-platform="tiktok" type="button"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 创作者</strong><small>官方接口需要创作者授权</small></span><b class="source-state auth">需授权</b></button>
             </div>
 
             <div class="intel-feed" id="intelFeed"></div>
             <div class="intel-empty" id="intelEmpty" hidden>
               <span><i data-lucide="inbox"></i></span>
-              <strong>当前筛选下没有资讯</strong>
-              <p>换一个来源，或配置 YouTube API 后查看欧美游戏热门。</p>
+              <strong id="intelEmptyTitle">当前还没有游戏资讯</strong>
+              <p id="intelEmptyDescription">等待下一次社区资讯同步，或切换到其他资讯栏目。</p>
             </div>
             <div class="table-footer"><span id="intelFooterSummary">等待首次资讯同步</span><span>资讯更新时间：<strong id="contentUpdatedTime">尚未同步</strong></span></div>
           </section>

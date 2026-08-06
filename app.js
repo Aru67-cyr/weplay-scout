@@ -223,6 +223,42 @@ const sourceMeta = {
   intel: ["资讯监控", "新游资讯流", "汇总创作者与欧美游戏社区的最新内容，辅助发现榜单之外的新游信号。"],
 };
 
+const intelPlatformMeta = {
+  forum: {
+    title: "游戏资讯",
+    boardTitle: "欧美游戏资讯",
+    pageDescription: "集中查看欧美游戏社区头条，发现榜单之外的新游、更新与行业信号。",
+    boardDescription: "追踪 ResetEra 游戏社区头条，优先标记近期新游与 Steam 对应游戏。",
+    searchPlaceholder: "搜索游戏资讯标题、来源或关联游戏",
+    emptyTitle: "当前还没有游戏资讯",
+    emptyDescription: "等待下一次社区资讯同步，或切换到其他资讯栏目。",
+    hotSortLabel: "综合热度",
+    itemLabel: "游戏资讯",
+  },
+  youtube: {
+    title: "YouTube 热门",
+    boardTitle: "YouTube 游戏热门",
+    pageDescription: "按欧美热门地区查看近期游戏视频，用中文标题快速识别正在升温的话题。",
+    boardDescription: "汇总美国、英国、法国、德国与意大利热门视频，并关联对应 Steam 游戏。",
+    searchPlaceholder: "搜索中文或原文标题、博主或关联游戏",
+    emptyTitle: "当前还没有 YouTube 热门视频",
+    emptyDescription: "等待下一次 YouTube 同步，或切换到其他资讯栏目。",
+    hotSortLabel: "YouTube 热度",
+    itemLabel: "YouTube 视频",
+  },
+  tiktok: {
+    title: "TikTok 创作者",
+    boardTitle: "TikTok 创作者动态",
+    pageDescription: "单独管理 TikTok 博主与视频线索，不与论坛资讯或 YouTube 热门混排。",
+    boardDescription: "集中查看已关注的 TikTok 创作者；未授权账号会保留在观察名单中。",
+    searchPlaceholder: "搜索 TikTok 标题、创作者或关联游戏",
+    emptyTitle: "还没有可展示的 TikTok 动态",
+    emptyDescription: "先添加关注的创作者；后续可通过主页嵌入或视频链接收件箱补充内容。",
+    hotSortLabel: "TikTok 热度",
+    itemLabel: "TikTok 动态",
+  },
+};
+
 const categoryOptions = [
   [492, "独立"],
   [19, "动作"],
@@ -261,7 +297,7 @@ const state = {
   radarCrossOnly: false,
   selectedId: null,
   viewMode: "list",
-  intelPlatform: "all",
+  intelPlatform: "forum",
   intelNewOnly: false,
   intelSort: "hot",
 };
@@ -786,7 +822,7 @@ function setSource(source) {
     $(".view-switch").hidden = true;
     $("#syncButton").hidden = true;
     $("#createMonitorButton").hidden = true;
-    $("#searchInput").placeholder = "搜索资讯标题、来源或关联游戏";
+    updateIntelPlatformUI();
     renderContent();
     loadContentData();
     closeMobileSidebar();
@@ -1080,6 +1116,55 @@ function sourceState(source) {
   return labels[source?.status] || ["待配置", "pending"];
 }
 
+function updateContentNavigationCounts() {
+  const counts = {
+    forum: contentItems.filter((item) => item.platform === "forum").length,
+    youtube: contentItems.filter((item) => item.platform === "youtube").length,
+    tiktok: contentItems.filter((item) => item.platform === "tiktok").length,
+  };
+  $("#contentCount").textContent = contentItems.length;
+  $("#forumContentCount").textContent = counts.forum;
+  $("#youtubeContentCount").textContent = counts.youtube;
+  $("#tiktokContentCount").textContent = counts.tiktok;
+  return counts;
+}
+
+function updateIntelPlatformUI() {
+  const meta = intelPlatformMeta[state.intelPlatform] || intelPlatformMeta.forum;
+  $$(".nav-subitem").forEach((button) => button.classList.toggle("active", button.dataset.intelPlatform === state.intelPlatform));
+  $$("#contentSourceStrip [data-intel-platform]").forEach((button) => {
+    const active = button.dataset.intelPlatform === state.intelPlatform;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  if (state.source !== "intel") return;
+
+  $("#breadcrumb").textContent = `资讯监控 · ${meta.title}`;
+  $("#pageTitle").textContent = meta.title;
+  $("#pageDescription").textContent = meta.pageDescription;
+  $("#intelBoardTitle").textContent = meta.boardTitle;
+  $("#intelBoardDescription").textContent = meta.boardDescription;
+  $("#searchInput").placeholder = meta.searchPlaceholder;
+  $("#intelEmptyTitle").textContent = meta.emptyTitle;
+  $("#intelEmptyDescription").textContent = meta.emptyDescription;
+  $("#intelSort option[value='hot']").textContent = meta.hotSortLabel;
+  const addCreatorButton = $("#addCreatorButton");
+  addCreatorButton.hidden = state.intelPlatform === "forum";
+  addCreatorButton.querySelector("span").textContent = state.intelPlatform === "tiktok" ? "添加创作者" : "添加博主";
+}
+
+function setIntelPlatform(platform) {
+  if (!intelPlatformMeta[platform]) return;
+  state.intelPlatform = platform;
+  if (state.source !== "intel") {
+    setSource("intel");
+    return;
+  }
+  updateIntelPlatformUI();
+  renderContent();
+  closeMobileSidebar();
+}
+
 function renderContentSources() {
   const mergedSources = [...contentSources];
   localContentSources.forEach((source) => {
@@ -1096,16 +1181,17 @@ function renderContentSources() {
     : "中文标题待配置";
   const tiktok = mergedSources.filter((source) => source.platform === "tiktok");
   const tiktokState = tiktok[0] || { status: "requires_auth" };
+  const counts = updateContentNavigationCounts();
   const cards = [
     {
       platform: "forum",
-      title: forum?.name || "ResetEra 游戏头条",
+      title: `${forum?.name || "ResetEra 游戏头条"} · ${counts.forum} 条`,
       detail: forum?.last_synced_at ? `最近同步 ${formatContentTime(forum.last_synced_at)}` : "公开 RSS · 每日更新",
       state: sourceState(forum),
     },
     {
       platform: "youtube",
-      title: `YouTube 游戏热门 · ${youtubeRegions.length || 5} 区`,
+      title: `YouTube 游戏热门 · ${youtubeRegions.length || 5} 区 · ${counts.youtube} 条`,
       detail: youtubeConfigured
         ? `官方 Data API · ${translationDetail} · 每日更新${youtubeCreators.length ? ` · ${youtubeCreators.length} 个博主` : ""}`
         : `配置 API Key 后启用${youtubeCreators.length ? ` · 已保存 ${youtubeCreators.length} 个博主` : ""}`,
@@ -1113,17 +1199,17 @@ function renderContentSources() {
     },
     {
       platform: "tiktok",
-      title: tiktok.length ? `TikTok 创作者 · ${tiktok.length} 个` : "TikTok 创作者",
+      title: tiktok.length ? `TikTok 创作者 · ${tiktok.length} 个 · ${counts.tiktok} 条` : `TikTok 创作者 · ${counts.tiktok} 条`,
       detail: "官方接口需要每位创作者授权",
       state: sourceState(tiktokState),
     },
   ];
   $("#contentSourceStrip").innerHTML = cards.map((card) => `
-    <div class="source-status-item">
+    <button class="source-status-item ${state.intelPlatform === card.platform ? "active" : ""}" data-intel-platform="${card.platform}" type="button" aria-pressed="${state.intelPlatform === card.platform}">
       <span class="source-status-icon ${card.platform}"><i data-lucide="${contentIcon(card.platform)}"></i></span>
       <span><strong>${escapeHTML(card.title)}</strong><small>${escapeHTML(card.detail)}</small></span>
       <b class="source-state ${card.state[1]}">${card.state[0]}</b>
-    </div>`).join("");
+    </button>`).join("");
 }
 
 function getFilteredContent() {
@@ -1142,7 +1228,9 @@ function getFilteredContent() {
 function renderContent() {
   if (!$("#intelFeed")) return;
   const filtered = getFilteredContent();
-  const signalCount = contentItems.filter((item) => item.is_new_game).length;
+  const platformItems = contentItems.filter((item) => item.platform === state.intelPlatform);
+  const signalCount = platformItems.filter((item) => item.is_new_game).length;
+  const meta = intelPlatformMeta[state.intelPlatform] || intelPlatformMeta.forum;
   $("#intelFeed").innerHTML = filtered.map((item) => {
     const articleUrl = safeExternalUrl(item.url);
     const sourceLabel = item.platform === "youtube"
@@ -1181,13 +1269,13 @@ function renderContent() {
       </article>`;
   }).join("");
   $("#intelResultCount").textContent = `${filtered.length} 条`;
-  $("#contentCount").textContent = signalCount;
   if (state.source === "intel") $("#freshBadge").textContent = `DAILY · ${signalCount} 条新游信号`;
   $("#intelEmpty").hidden = filtered.length !== 0;
-  $("#intelFooterSummary").textContent = contentItems.length
-    ? `已收录 ${contentItems.length} 条 · ${signalCount} 条新游信号`
-    : "等待首次资讯同步";
+  $("#intelFooterSummary").textContent = platformItems.length
+    ? `${meta.itemLabel} ${platformItems.length} 条 · ${signalCount} 条新游信号`
+    : `${meta.itemLabel}等待接入`;
   renderContentSources();
+  updateIntelPlatformUI();
   lucide.createIcons();
 }
 
@@ -1339,6 +1427,11 @@ async function bootstrapData() {
 }
 
 $$(".nav-item").forEach((button) => button.addEventListener("click", () => setSource(button.dataset.source)));
+$$(".nav-subitem").forEach((button) => button.addEventListener("click", () => setIntelPlatform(button.dataset.intelPlatform)));
+$("#contentSourceStrip").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-intel-platform]");
+  if (button) setIntelPlatform(button.dataset.intelPlatform);
+});
 $$(".board-tab").forEach((button) => button.addEventListener("click", () => setBoard(button.dataset.board)));
 
 $("#searchInput").addEventListener("input", (event) => {
@@ -1549,11 +1642,6 @@ $("#monitorForm").addEventListener("submit", (event) => {
   showToast(`监控“${name}”已创建 · 当前命中 ${matched} 款`);
 });
 
-$("#intelPlatformFilter").addEventListener("change", (event) => {
-  state.intelPlatform = event.target.value;
-  renderContent();
-});
-
 $("#intelSort").addEventListener("change", (event) => {
   state.intelSort = event.target.value;
   renderContent();
@@ -1590,7 +1678,11 @@ $("#contentSyncButton").addEventListener("click", async () => {
   }
 });
 
-$("#addCreatorButton").addEventListener("click", () => $("#creatorModal").showModal());
+$("#addCreatorButton").addEventListener("click", () => {
+  $("#creatorPlatform").value = state.intelPlatform === "tiktok" ? "tiktok" : "youtube";
+  $("#creatorPlatform").dispatchEvent(new Event("change"));
+  $("#creatorModal").showModal();
+});
 $$("[data-creator-close]").forEach((button) => button.addEventListener("click", closeCreatorModal));
 $("#creatorModal").addEventListener("cancel", (event) => {
   event.preventDefault();
