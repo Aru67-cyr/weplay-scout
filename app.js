@@ -1123,15 +1123,11 @@ function updateContentNavigationCounts() {
     tiktok: contentItems.filter((item) => item.platform === "tiktok").length,
   };
   $("#contentCount").textContent = contentItems.length;
-  $("#forumContentCount").textContent = counts.forum;
-  $("#youtubeContentCount").textContent = counts.youtube;
-  $("#tiktokContentCount").textContent = counts.tiktok;
   return counts;
 }
 
 function updateIntelPlatformUI() {
   const meta = intelPlatformMeta[state.intelPlatform] || intelPlatformMeta.forum;
-  $$(".nav-subitem").forEach((button) => button.classList.toggle("active", button.dataset.intelPlatform === state.intelPlatform));
   $$("#contentSourceStrip [data-intel-platform]").forEach((button) => {
     const active = button.dataset.intelPlatform === state.intelPlatform;
     button.classList.toggle("active", active);
@@ -1427,7 +1423,6 @@ async function bootstrapData() {
 }
 
 $$(".nav-item").forEach((button) => button.addEventListener("click", () => setSource(button.dataset.source)));
-$$(".nav-subitem").forEach((button) => button.addEventListener("click", () => setIntelPlatform(button.dataset.intelPlatform)));
 $("#contentSourceStrip").addEventListener("click", (event) => {
   const button = event.target.closest("[data-intel-platform]");
   if (button) setIntelPlatform(button.dataset.intelPlatform);

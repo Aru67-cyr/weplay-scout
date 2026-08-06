@@ -45,7 +45,12 @@ jobs:
           restore-keys: |
             scoutline-db-
 
-      - name: Collect data and build static site
+      - name: Build feature release from cached data
+        if: github.event_name == 'push'
+        run: python export_static.py --skip-sync
+
+      - name: Collect daily data and build static site
+        if: github.event_name != 'push'
         run: python export_static.py
 
       - name: Configure Pages
