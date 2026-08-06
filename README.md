@@ -52,7 +52,7 @@ python3 export_static.py
 可选的 GitHub 配置：
 
 - Actions secret `YOUTUBE_API_KEY`：YouTube Data API 服务端密钥
-- Actions secret `DEEPL_API_KEY`：DeepL API Free 或 Pro 密钥，用于生成简体中文视频标题
+- Actions secret `DEEPL_API_KEY`：DeepL API Developer、Growth 或旧版 Free 密钥，用于生成简体中文视频标题
 - Actions variable `SCOUTLINE_YOUTUBE_CHANNELS`：`显示名称|@handle,显示名称|UC频道ID`
 - Actions variable `SCOUTLINE_YOUTUBE_REGIONS`：热门视频地区，默认 `US,GB,FR,DE,IT`
 - Actions variable `SCOUTLINE_YOUTUBE_MAX_RESULTS`：每个地区和频道读取数量，默认 `20`，范围 `5-50`
@@ -68,7 +68,7 @@ python3 export_static.py
 
 ## YouTube 中文标题
 
-1. 在 DeepL 创建 API Free 账户并取得 API Key；Free 方案目前每月包含 50 万字符额度。
+1. 在 DeepL 选择 Developer API 并创建账户；该方案目前包含累计 100 万字符额度。
 2. 在 GitHub 仓库 `Settings > Secrets and variables > Actions > Secrets` 新建 `DEEPL_API_KEY`。
 3. 在 Actions 页面手动运行一次 `Update data and deploy Pages`。
 
