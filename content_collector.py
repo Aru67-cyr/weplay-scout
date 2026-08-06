@@ -198,7 +198,7 @@ def add_content_source(platform: str, name: str, locator: str) -> dict[str, Any]
         raise ValueError("仅支持添加 YouTube 或 TikTok 创作者")
     normalized = normalize_creator_locator(platform, locator)
     display_name = name.strip() or normalized
-    status = "requires_auth" if platform == "tiktok" else "pending"
+    status = "embedded" if platform == "tiktok" else "pending"
     with connect() as db:
         db.execute(
             """
@@ -762,5 +762,5 @@ def get_content(limit: int = 160) -> dict[str, Any]:
         "youtube_regions": list(youtube_regions()),
         "youtube_trending_locator": YOUTUBE_TRENDING_LOCATOR,
         "title_translation_configured": bool(os.environ.get("DEEPL_API_KEY", "").strip()),
-        "tiktok_mode": "creator_authorization_required",
+        "tiktok_mode": "public_embed_and_manual_inbox",
     }

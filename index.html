@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="面向 Steam 的新游榜单发现与线索管理工作台" />
     <title>Scoutline - 新游线索工作台</title>
-    <link rel="stylesheet" href="styles.css?v=20260806e" />
+    <link rel="stylesheet" href="styles.css?v=20260806f" />
   </head>
   <body>
     <div class="app-shell">
@@ -325,7 +325,55 @@
             <div class="source-status-strip" id="contentSourceStrip">
               <button class="source-status-item active" data-intel-platform="forum" type="button"><span class="source-status-icon forum"><i data-lucide="messages-square"></i></span><span><strong>ResetEra 游戏头条</strong><small>正在连接公开 RSS</small></span><b class="source-state pending">连接中</b></button>
               <button class="source-status-item" data-intel-platform="youtube" type="button"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 游戏热门</strong><small>配置 API Key 后监控欧美热门视频</small></span><b class="source-state pending">待配置</b></button>
-              <button class="source-status-item" data-intel-platform="tiktok" type="button"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 创作者</strong><small>官方接口需要创作者授权</small></span><b class="source-state auth">需授权</b></button>
+              <button class="source-status-item" data-intel-platform="tiktok" type="button"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 工作台</strong><small>主页嵌入 · 视频收件箱 · 地区趋势</small></span><b class="source-state active">可用</b></button>
+            </div>
+
+            <div class="tiktok-workspace" id="tiktokWorkspace" hidden>
+              <div class="tiktok-modebar" role="tablist" aria-label="TikTok 工作区">
+                <button class="active" data-tiktok-mode="creators" type="button" role="tab" aria-selected="true"><i data-lucide="users"></i><span>博主观察</span><b id="tiktokCreatorTabCount">0</b></button>
+                <button data-tiktok-mode="inbox" type="button" role="tab" aria-selected="false"><i data-lucide="inbox"></i><span>视频收件箱</span><b id="tiktokInboxTabCount">0</b></button>
+                <button data-tiktok-mode="trends" type="button" role="tab" aria-selected="false"><i data-lucide="map-pinned"></i><span>地区趋势</span><b>4</b></button>
+              </div>
+
+              <section class="tiktok-panel" data-tiktok-panel="creators">
+                <div class="tiktok-creators-layout">
+                  <aside class="tiktok-directory" aria-label="TikTok 博主观察名单">
+                    <div class="tiktok-directory-heading"><strong>观察名单</strong><span id="tiktokCreatorCount">0 位</span></div>
+                    <div class="tiktok-directory-tools">
+                      <label class="tiktok-creator-search"><i data-lucide="search"></i><input id="tiktokCreatorSearch" type="search" placeholder="搜索博主" /></label>
+                      <label class="tiktok-category-select"><span class="sr-only">博主类型</span><select id="tiktokCreatorCategory"><option value="all">全部类型</option><option value="英语游戏">英语游戏</option><option value="Cozy">Cozy</option><option value="游戏实况">游戏实况</option><option value="VR">VR</option><option value="桌游">桌游</option><option value="热点灵感">热点灵感</option><option value="法语游戏">法语游戏</option><option value="我的关注">我的关注</option></select></label>
+                    </div>
+                    <div class="tiktok-creator-list" id="tiktokCreatorList"></div>
+                  </aside>
+                  <div class="tiktok-embed-panel">
+                    <div class="tiktok-embed-heading">
+                      <div><strong id="tiktokCreatorDisplayName">TikTok 博主</strong><small id="tiktokCreatorDisplayMeta">主页嵌入</small></div>
+                      <a class="button compact ghost" id="tiktokCreatorProfileLink" href="https://www.tiktok.com" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>打开主页</span></a>
+                    </div>
+                    <div class="tiktok-creator-embed" id="tiktokCreatorEmbed"></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="tiktok-panel" data-tiktok-panel="inbox" hidden>
+                <div class="tiktok-inbox-heading">
+                  <div><strong>视频收件箱</strong><span id="tiktokInboxCount">0 条</span><small id="tiktokInboxUnread">0 条待查看</small></div>
+                  <form class="tiktok-inbox-form" id="tiktokInboxForm">
+                    <label><span class="sr-only">TikTok 视频链接</span><input name="url" type="url" required placeholder="粘贴 TikTok 视频链接" /></label>
+                    <label><span class="sr-only">关联游戏</span><input name="game" placeholder="关联游戏（可选）" /></label>
+                    <button class="button primary" type="submit"><i data-lucide="plus"></i><span>加入收件箱</span></button>
+                  </form>
+                </div>
+                <div class="tiktok-inbox-list" id="tiktokInboxList"></div>
+              </section>
+
+              <section class="tiktok-panel" data-tiktok-panel="trends" hidden>
+                <div class="tiktok-trends-heading">
+                  <div><strong>目标地区趋势</strong><span>Creative Center</span></div>
+                  <small>热门广告用于创意参考，热门话题用于自然流量观察</small>
+                </div>
+                <div class="tiktok-trend-grid" id="tiktokTrendGrid"></div>
+              </section>
             </div>
 
             <div class="intel-feed" id="intelFeed"></div>
@@ -334,7 +382,7 @@
               <strong id="intelEmptyTitle">当前还没有游戏资讯</strong>
               <p id="intelEmptyDescription">等待下一次社区资讯同步，或切换到其他资讯栏目。</p>
             </div>
-            <div class="table-footer"><span id="intelFooterSummary">等待首次资讯同步</span><span>资讯更新时间：<strong id="contentUpdatedTime">尚未同步</strong></span></div>
+            <div class="table-footer" id="intelFooter"><span id="intelFooterSummary">等待首次资讯同步</span><span>资讯更新时间：<strong id="contentUpdatedTime">尚未同步</strong></span></div>
           </section>
         </main>
       </section>
@@ -382,6 +430,6 @@
 
     <div class="toast-region" id="toastRegion" aria-live="polite"></div>
     <script src="assets/lucide.min.js"></script>
-    <script src="app.js?v=20260806e"></script>
+    <script src="app.js?v=20260806f"></script>
   </body>
 </html>
