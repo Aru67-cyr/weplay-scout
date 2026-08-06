@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="面向 Steam 的新游榜单发现与线索管理工作台" />
+    <title>Scoutline - 新游线索工作台</title>
+    <link rel="stylesheet" href="styles.css?v=20260806d" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <span class="brand-mark"><i data-lucide="scan-search"></i></span>
+          <span>
+            <strong>WePlay Scout</strong>
+            <small>欧美新游机会雷达</small>
+          </span>
+        </div>
+
+        <button class="source-switcher" type="button" id="sourceSwitcher">
+          <span class="source-icon"><i data-lucide="gamepad-2"></i></span>
+          <span><small>当前数据源</small><strong>Steam</strong></span>
+          <i data-lucide="chevrons-up-down"></i>
+        </button>
+
+        <nav class="nav-group" aria-label="榜单发现">
+          <p class="nav-label">榜单发现</p>
+          <button class="nav-item active" data-source="all" type="button">
+            <i data-lucide="layout-dashboard"></i><span>综合机会榜</span><b>128</b>
+          </button>
+          <button class="nav-item" data-source="new" type="button">
+            <i data-lucide="sparkles"></i><span>热门新品</span><b>42</b>
+          </button>
+          <button class="nav-item" data-source="upcoming" type="button">
+            <i data-lucide="clock-3"></i><span>即将推出</span><b>31</b>
+          </button>
+          <button class="nav-item" data-source="seller" type="button">
+            <i data-lucide="chart-no-axes-combined"></i><span>全球热销</span><b>50</b>
+          </button>
+          <button class="nav-item" data-source="online" type="button">
+            <i data-lucide="users"></i><span>当前在线</span><b>18</b>
+          </button>
+          <button class="nav-item" data-source="regional" type="button">
+            <i data-lucide="globe-2"></i><span>跨区热销</span><b>26</b>
+          </button>
+          <button class="nav-item" data-source="category" type="button">
+            <i data-lucide="tags"></i><span>类型榜单</span><b>8类</b>
+          </button>
+        </nav>
+
+        <nav class="nav-group" aria-label="我的工作">
+          <p class="nav-label">我的工作</p>
+          <button class="nav-item" data-source="favorites" type="button">
+            <i data-lucide="bookmark"></i><span>已收藏线索</span><b id="favoriteCount">3</b>
+          </button>
+          <button class="nav-item" data-source="following" type="button">
+            <i data-lucide="circle-dot-dashed"></i><span>待跟进</span><b id="followingCount">2</b>
+          </button>
+          <button class="nav-item" data-source="monitors" type="button">
+            <i data-lucide="radar"></i><span>我的监控</span><b id="monitorCount">0</b>
+          </button>
+          <button class="nav-item" data-source="intel" type="button">
+            <i data-lucide="newspaper"></i><span>资讯监控</span><b id="contentCount">0</b>
+          </button>
+        </nav>
+
+        <div class="sidebar-status">
+          <div class="status-heading">
+            <span id="statusText"><i class="status-dot"></i>数据源运行正常</span>
+            <span id="sourceHealth">0/15</span>
+          </div>
+          <div class="status-track"><span></span></div>
+          <small id="scheduleText">GitHub Actions 每天 03:00 更新</small>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <button class="icon-button mobile-menu" id="mobileMenu" type="button" aria-label="打开导航">
+            <i data-lucide="menu"></i>
+          </button>
+          <div class="breadcrumbs"><span>WePlay 欧美区</span><i data-lucide="chevron-right"></i><strong id="breadcrumb">综合机会榜</strong></div>
+          <label class="global-search" for="searchInput">
+            <i data-lucide="search"></i>
+            <input id="searchInput" type="search" placeholder="搜索游戏、发行商、App ID 或标签" autocomplete="off" />
+            <kbd>⌘ K</kbd>
+          </label>
+          <div class="top-actions">
+            <button class="icon-button" id="notificationButton" type="button" aria-label="通知" aria-expanded="false" aria-controls="notificationMenu"><i data-lucide="bell"></i><span class="notification-dot"></span></button>
+            <button class="avatar-button" id="accountButton" type="button" aria-label="账户菜单" aria-expanded="false" aria-controls="accountMenu"><span>YW</span><i data-lucide="chevron-down"></i></button>
+            <div class="top-popover notification-menu" id="notificationMenu" hidden>
+              <div class="popover-heading"><strong>通知</strong><span>每日同步</span></div>
+              <div class="notification-item"><span class="notice-icon"><i data-lucide="circle-check"></i></span><span><strong>Steam 数据同步完成</strong><small id="notificationSyncTime">等待同步时间</small></span></div>
+              <div class="notification-item"><span class="notice-icon"><i data-lucide="tags"></i></span><span><strong>类型榜单已更新</strong><small><b id="notificationGameCount">0</b> 款游戏已入库</small></span></div>
+              <button class="popover-action" data-top-action="categories" type="button"><i data-lucide="tags"></i>查看类型榜单</button>
+            </div>
+            <div class="top-popover account-menu" id="accountMenu" hidden>
+              <div class="account-summary"><span>YW</span><div><strong>WePlay 欧美区</strong><small>新游线索工作台</small></div></div>
+              <button class="menu-action" data-top-action="favorites" type="button"><i data-lucide="bookmark"></i><span>已收藏线索</span><i data-lucide="chevron-right"></i></button>
+              <button class="menu-action" data-top-action="status" type="button"><i data-lucide="database"></i><span>数据源状态</span><b id="accountSourceHealth">0/15</b></button>
+            </div>
+          </div>
+        </header>
+
+        <main>
+          <div class="page-heading">
+            <div>
+              <div class="title-line"><h1 id="pageTitle">欧美新游趋势</h1><span class="fresh-badge" id="freshBadge">LIVE · 今日新增 24</span></div>
+              <p id="pageDescription">聚合 Steam 榜单信号，寻找适合 WePlay 欧美区服的新游机会。</p>
+            </div>
+            <div class="heading-actions">
+              <div class="view-switch" aria-label="视图切换">
+                <button class="active" data-mode="list" type="button"><i data-lucide="list"></i><span>列表</span></button>
+                <button data-mode="radar" type="button"><i data-lucide="radar"></i><span>雷达</span></button>
+              </div>
+              <button class="button secondary" id="syncButton" type="button"><i data-lucide="refresh-cw"></i><span>同步榜单</span></button>
+              <button class="button primary" id="createMonitorButton" type="button"><i data-lucide="plus"></i><span>新建监控</span></button>
+            </div>
+          </div>
+
+          <section class="metrics-band" id="metricsBand" aria-label="今日概览">
+            <article>
+              <div class="metric-label"><span class="metric-icon green"><i data-lucide="radio-tower"></i></span>今日捕获</div>
+              <div class="metric-value"><strong id="capturedCount">24</strong><span class="positive"><i data-lucide="arrow-up-right"></i> 已入库</span></div>
+              <small id="capturedNote">最近一次同步入库</small>
+            </article>
+            <article>
+              <div class="metric-label"><span class="metric-icon blue"><i data-lucide="zap"></i></span>趋势新游</div>
+              <div class="metric-value"><strong id="trendCount">11</strong><span>7 日增幅 ≥ 50%</span></div>
+              <small id="trendNote">积累满 7 天后可计算</small>
+            </article>
+            <article>
+              <div class="metric-label"><span class="metric-icon amber"><i data-lucide="trending-up"></i></span>最快上升</div>
+              <div class="metric-value"><strong id="fastestRise">—</strong><span>位</span></div>
+              <small id="fastestGame">《The Alters》· 全球热销</small>
+            </article>
+            <article>
+              <div class="metric-label"><span class="metric-icon violet"><i data-lucide="bookmark-check"></i></span>待跟进</div>
+              <div class="metric-value"><strong id="metricFollowing">2</strong><span>条线索</span></div>
+              <small id="followingNote">收藏线索后可标记跟进</small>
+            </article>
+          </section>
+
+          <section class="data-section" id="listView">
+            <div class="board-heading">
+              <div>
+                <div class="board-title-line"><span class="live-dot"></span><h2 id="boardTitle">值得关注的趋势新游</h2><span id="resultCount">8 款</span></div>
+                <p id="boardDescription">按 7 日活跃玩家增幅排序，优先发现正在形成热度的新游戏。</p>
+              </div>
+              <div class="board-heading-actions">
+              <button class="button compact ghost" id="filterButton" type="button"><i data-lucide="list-filter"></i><span>筛选</span><b id="filterCount" hidden>0</b></button>
+              <button class="button compact ghost" id="columnsButton" type="button"><i data-lucide="columns-3"></i><span>字段</span></button>
+              </div>
+            </div>
+
+            <div class="board-tabs" role="tablist" aria-label="趋势榜单">
+              <button class="board-tab active" type="button" data-board="trending"><i data-lucide="trending-up"></i><span><strong>趋势新游</strong><small>7 日增长最快</small></span><b>24</b></button>
+              <button class="board-tab" type="button" data-board="popular"><i data-lucide="flame"></i><span><strong>热门游戏</strong><small>当前在线最高</small></span><b>50</b></button>
+            </div>
+
+            <div class="filters-panel" id="filtersPanel" hidden>
+              <div class="filter-block">
+                <label>游戏类型</label>
+                <div class="check-group" id="genreFilters">
+                  <label><input type="checkbox" value="RPG" />RPG</label>
+                  <label><input type="checkbox" value="策略" />策略</label>
+                  <label><input type="checkbox" value="动作" />动作</label>
+                  <label><input type="checkbox" value="模拟" />模拟</label>
+                  <label><input type="checkbox" value="冒险" />冒险</label>
+                </div>
+              </div>
+              <div class="filter-block score-filter">
+                <label for="scoreRange">最低 7 日增幅 <strong id="scoreValue">0%</strong></label>
+                <input id="scoreRange" type="range" min="0" max="200" step="25" value="0" />
+              </div>
+              <div class="filter-block">
+                <label for="releaseFilter">发行状态</label>
+                <select id="releaseFilter">
+                  <option value="all">全部状态</option>
+                  <option value="released">已发行</option>
+                  <option value="upcoming">即将发行</option>
+                </select>
+              </div>
+              <button class="text-button" id="resetFilters" type="button">重置筛选</button>
+            </div>
+
+            <div class="table-tools">
+              <div class="active-context"><span class="live-dot"></span><strong id="contextLabel">全部榜单</strong><span id="contextHint">每日同步更新</span></div>
+              <div class="table-tool-actions">
+                <label class="category-control" id="categoryControl" hidden>类型
+                  <select id="categorySelect">
+                    <option value="all">全部精选类型</option>
+                    <option value="492">独立</option>
+                    <option value="19">动作</option>
+                    <option value="122">RPG</option>
+                    <option value="9">策略</option>
+                    <option value="599">模拟</option>
+                    <option value="1685">合作</option>
+                    <option value="1662">生存</option>
+                    <option value="1667">恐怖</option>
+                  </select>
+                </label>
+                <label class="region-control" id="serverControl" hidden>区服
+                  <select id="serverSelect">
+                    <option value="all">跨区总览</option>
+                    <option value="us">美服</option>
+                    <option value="fr">法语服</option>
+                    <option value="de">德语服</option>
+                    <option value="it">意大利服</option>
+                  </select>
+                </label>
+                <label class="region-control" id="countryControl" hidden>国家
+                  <select id="countrySelect"><option value="all">全部国家</option></select>
+                </label>
+                <label class="sort-control">排序
+                  <select id="sortSelect">
+                    <option value="growth">7 日在线增幅</option>
+                    <option value="market">跨区与榜单信号</option>
+                    <option value="active">实时在线人数</option>
+                    <option value="followers">评价数</option>
+                    <option value="rank">榜单排名</option>
+                    <option value="category">类型榜排名</option>
+                    <option value="release">上线日期</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th class="pin-col">游戏</th>
+                    <th>上线日期</th>
+                    <th>实时在线</th>
+                    <th>7 日趋势</th>
+                    <th>7 日增幅</th>
+                    <th>评价数</th>
+                    <th>榜单信号</th>
+                    <th>价格</th>
+                    <th><span class="sr-only">操作</span></th>
+                  </tr>
+                </thead>
+                <tbody id="gameRows"></tbody>
+              </table>
+              <div class="empty-state" id="emptyState" hidden>
+                <span><i data-lucide="search-x"></i></span>
+                <strong>没有找到匹配的线索</strong>
+                <p>试试减少筛选条件或换一个关键词。</p>
+                <button class="button secondary" id="emptyReset" type="button">清除筛选</button>
+              </div>
+            </div>
+            <div class="table-footer"><span id="footerSummary">显示 8 条线索</span><span>数据更新时间：<strong id="updatedTime">今天 10:30</strong></span></div>
+          </section>
+
+          <section class="radar-section" id="radarView" hidden>
+            <div class="radar-toolbar">
+              <div class="radar-toolbar-header">
+                <div>
+                  <div class="radar-title"><span class="live-dot"></span><h2>游戏趋势分布</h2><span id="radarCount">前 20 个候选</span></div>
+                  <p id="radarDescription">横轴与列表优先级一致，纵轴为当前在线规模。</p>
+                </div>
+                <div class="radar-legend" aria-label="发行状态图例">
+                  <span><i class="legend-dot high"></i>已发行</span>
+                  <span><i class="legend-dot watch"></i>抢先体验</span>
+                  <span><i class="legend-dot early"></i>即将发行</span>
+                </div>
+              </div>
+              <div class="radar-filterbar" aria-label="雷达筛选">
+                <label class="radar-select-control"><span>候选</span><select id="radarLimit"><option value="12">前 12</option><option value="20">前 20</option><option value="40">前 40</option><option value="80">前 80</option><option value="all">全部</option></select></label>
+                <label class="radar-select-control"><span>最低在线</span><select id="radarMinActive"><option value="0">不限</option><option value="100">100+</option><option value="1000">1,000+</option><option value="10000">10,000+</option></select></label>
+                <label class="radar-toggle"><input id="radarNewOnly" type="checkbox" /><span>只看新游</span></label>
+                <label class="radar-toggle"><input id="radarCrossOnly" type="checkbox" /><span>跨区上榜</span></label>
+                <button class="icon-button radar-reset" id="radarReset" type="button" aria-label="重置雷达筛选" title="重置雷达筛选"><i data-lucide="rotate-ccw"></i></button>
+              </div>
+            </div>
+            <div class="radar-layout">
+              <div class="radar-canvas" id="radarCanvas">
+                <div class="axis-label axis-y"><i data-lucide="arrow-up"></i> 当前在线规模（对数）</div>
+                <div class="axis-label axis-x">7 日在线增幅 <i data-lucide="arrow-right"></i></div>
+                <div class="quadrant-label top-left"><strong>高热观察</strong><span>体量高 · 当前优先级靠后</span></div>
+                <div class="quadrant-label top-right"><strong>优先机会</strong><span>体量高 · 当前优先级靠前</span></div>
+                <div class="quadrant-label bottom-left"><strong>早期观察</strong><span>体量与信号仍待验证</span></div>
+                <div class="quadrant-label bottom-right"><strong>潜力线索</strong><span>体量小 · 当前优先级靠前</span></div>
+                <div class="radar-cross vertical"></div>
+                <div class="radar-cross horizontal"></div>
+                <div class="radar-bubbles" id="radarBubbles"></div>
+                <div class="radar-empty" id="radarEmpty" hidden><i data-lucide="search-x"></i><strong>没有匹配的游戏</strong><span>调整雷达筛选条件</span></div>
+              </div>
+              <aside class="priority-panel">
+                <div class="priority-heading">
+                  <div><span>增长最快</span><strong>按 7 日在线增幅排序</strong></div>
+                  <button class="icon-button" id="priorityMore" type="button" aria-label="返回列表"><i data-lucide="list"></i></button>
+                </div>
+                <div class="priority-list" id="priorityList"></div>
+                <div class="radar-notes">
+                  <div class="notes-heading"><i data-lucide="activity"></i><strong>数据口径</strong><span>客观信号</span></div>
+                  <p id="radarMethodText">此视图不使用 WePlay 主观适配评分，仅比较 Steam 活跃玩家、增长率和评价数量。</p>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="intel-section" id="intelView" hidden>
+            <div class="intel-toolbar">
+              <div>
+                <div class="board-title-line"><span class="live-dot"></span><h2>新游资讯流</h2><span id="intelResultCount">0 条</span></div>
+                <p>汇总创作者与欧美游戏社区的新发布内容，优先标记可能的新游线索。</p>
+              </div>
+              <div class="intel-actions">
+                <label class="intel-select">来源
+                  <select id="intelPlatformFilter">
+                    <option value="all">全部</option>
+                    <option value="forum">社区资讯</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="tiktok">TikTok</option>
+                  </select>
+                </label>
+                <label class="radar-toggle"><input id="intelNewOnly" type="checkbox" /><span>只看新游信号</span></label>
+                <button class="button secondary" id="contentSyncButton" type="button"><i data-lucide="refresh-cw"></i><span>更新资讯</span></button>
+                <button class="button primary" id="addCreatorButton" type="button"><i data-lucide="user-plus"></i><span>添加博主</span></button>
+              </div>
+            </div>
+
+            <div class="source-status-strip" id="contentSourceStrip">
+              <div class="source-status-item"><span class="source-status-icon forum"><i data-lucide="messages-square"></i></span><span><strong>ResetEra 游戏头条</strong><small>正在连接公开 RSS</small></span><b class="source-state pending">连接中</b></div>
+              <div class="source-status-item"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 创作者</strong><small>添加频道后开始监控</small></span><b class="source-state pending">待配置</b></div>
+              <div class="source-status-item"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 创作者</strong><small>官方接口需要创作者授权</small></span><b class="source-state auth">需授权</b></div>
+            </div>
+
+            <div class="intel-feed" id="intelFeed"></div>
+            <div class="intel-empty" id="intelEmpty" hidden>
+              <span><i data-lucide="inbox"></i></span>
+              <strong>当前筛选下没有资讯</strong>
+              <p>换一个来源，或先添加你关注的 YouTube 频道。</p>
+            </div>
+            <div class="table-footer"><span id="intelFooterSummary">等待首次资讯同步</span><span>资讯更新时间：<strong id="contentUpdatedTime">尚未同步</strong></span></div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <div class="overlay" id="overlay" hidden></div>
+
+    <aside class="detail-drawer" id="detailDrawer" aria-hidden="true" aria-label="线索详情">
+      <div id="drawerContent"></div>
+    </aside>
+
+    <dialog class="modal" id="monitorModal">
+      <form method="dialog" id="monitorForm">
+        <div class="modal-header">
+          <div><span class="modal-icon"><i data-lucide="radar"></i></span><h2>新建榜单监控</h2></div>
+          <button class="icon-button" data-monitor-close type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+        </div>
+        <p>当游戏进入指定榜单或达到条件时，自动加入你的线索池。</p>
+        <label class="field-label">监控名称<input name="name" required placeholder="例如：新品节生存游戏" /></label>
+        <div class="form-grid">
+          <label class="field-label">榜单来源<select name="source"><option>热门新品</option><option>全球热销</option><option>类型榜单</option><option>即将推出</option></select></label>
+          <label class="field-label">触发条件<select name="condition"><option>进入前 50 名</option><option>单日上升 20 位</option><option>7 日在线增幅达到 50%</option><option>评价数周增 10%</option></select></label>
+        </div>
+        <label class="field-label">包含标签<input name="tags" placeholder="生存、合作、策略（可选）" /></label>
+        <div class="modal-footer"><button class="button secondary" data-monitor-close type="button">取消</button><button class="button primary" type="submit"><i data-lucide="plus"></i>创建监控</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="creatorModal">
+      <form method="dialog" id="creatorForm">
+        <div class="modal-header">
+          <div><span class="modal-icon"><i data-lucide="user-plus"></i></span><h2>添加创作者来源</h2></div>
+          <button class="icon-button" data-creator-close type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+        </div>
+        <p id="creatorHelp">添加 YouTube 频道主页或频道 ID，先保存在当前浏览器的关注名单。</p>
+        <div class="form-grid">
+          <label class="field-label">平台<select name="platform" id="creatorPlatform"><option value="youtube">YouTube</option><option value="tiktok">TikTok</option></select></label>
+          <label class="field-label">显示名称<input name="name" placeholder="例如：Splattercatgaming" /></label>
+        </div>
+        <label class="field-label">主页链接或账号<input name="locator" required placeholder="https://youtube.com/@频道名" /></label>
+        <div class="modal-note" id="creatorNote"><i data-lucide="key-round"></i><span>云端自动采集使用 GitHub Actions 机密配置，密钥不会出现在网页中。</span></div>
+        <div class="modal-footer"><button class="button secondary" data-creator-close type="button">取消</button><button class="button primary" type="submit"><i data-lucide="plus"></i>添加来源</button></div>
+      </form>
+    </dialog>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+    <script src="assets/lucide.min.js"></script>
+    <script src="app.js?v=20260806d"></script>
+  </body>
+</html>
