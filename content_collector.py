@@ -29,6 +29,8 @@ USER_AGENT = "WePlay-Scout/1.0 (+local research dashboard)"
 RESET_ERA_FEED = "https://www.resetera.com/forums/gaming-headlines.54/index.rss"
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 YOUTUBE_TRENDING_LOCATOR = "youtube:gaming-trending"
+DEEPL_FREE_API_BASE = "https://api-free.deepl.com"
+DEEPL_PRO_API_BASE = "https://api.deepl.com"
 DEFAULT_YOUTUBE_REGIONS = ("US", "GB", "FR", "DE", "IT")
 CONTENT_SYNC_LOCK = threading.Lock()
 NEW_GAME_TERMS = re.compile(
@@ -58,6 +60,7 @@ def connect() -> sqlite3.Connection:
 def ensure_content_columns(db: sqlite3.Connection) -> None:
     existing = {row["name"] for row in db.execute("PRAGMA table_info(content_items)")}
     additions = {
+        "title_zh": "TEXT NOT NULL DEFAULT ''",
         "view_count": "INTEGER NOT NULL DEFAULT 0",
         "like_count": "INTEGER NOT NULL DEFAULT 0",
         "comment_count": "INTEGER NOT NULL DEFAULT 0",
@@ -93,6 +96,7 @@ def init_content_db() -> None:
                 external_id TEXT NOT NULL,
                 author TEXT NOT NULL DEFAULT '',
                 title TEXT NOT NULL,
+                title_zh TEXT NOT NULL DEFAULT '',
                 summary TEXT NOT NULL DEFAULT '',
                 url TEXT NOT NULL,
                 thumbnail TEXT NOT NULL DEFAULT '',
@@ -244,6 +248,35 @@ def http_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
     separator = "&" if "?" in url else "?"
     payload = http_bytes(f"{url}{separator}{urllib.parse.urlencode(params)}")
     return json.loads(payload.decode("utf-8"))
+
+
+def http_post_json(
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    retries: int = 2,
+) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            **headers,
+        },
+        method="POST",
+    )
+    last_error: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=35) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception as error:
+            last_error = error
+            if attempt < retries:
+                threading.Event().wait(0.8 * (attempt + 1))
+    raise RuntimeError(f"翻译服务请求失败: {last_error}")
 
 
 def youtube_json(resource: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -462,6 +495,61 @@ def fetch_youtube(source: sqlite3.Row) -> list[dict[str, Any]]:
     return fetch_youtube_channel(source)
 
 
+def translate_pending_youtube_titles(limit: int = 160, batch_size: int = 40) -> int:
+    api_key = os.environ.get("DEEPL_API_KEY", "").strip()
+    if not api_key:
+        return 0
+
+    with connect() as db:
+        pending = db.execute(
+            """
+            SELECT id, title, matched_game
+            FROM content_items
+            WHERE platform = 'youtube' AND title <> '' AND title_zh = ''
+            ORDER BY published_at DESC
+            LIMIT ?
+            """,
+            (max(1, min(300, int(limit))),),
+        ).fetchall()
+
+    if not pending:
+        return 0
+
+    endpoint = DEEPL_FREE_API_BASE if api_key.endswith(":fx") else DEEPL_PRO_API_BASE
+    translated_count = 0
+    normalized_batch_size = max(1, min(50, int(batch_size)))
+    for offset in range(0, len(pending), normalized_batch_size):
+        batch = pending[offset : offset + normalized_batch_size]
+        context_games = sorted({str(row["matched_game"]) for row in batch if row["matched_game"]})
+        context = "YouTube gaming video titles for a Chinese game-market research dashboard."
+        if context_games:
+            context += f" Preserve these official Steam game names: {', '.join(context_games[:30])}."
+        response = http_post_json(
+            f"{endpoint}/v2/translate",
+            {
+                "text": [str(row["title"]) for row in batch],
+                "target_lang": "ZH-HANS",
+                "context": context,
+                "split_sentences": "0",
+            },
+            {"Authorization": f"DeepL-Auth-Key {api_key}"},
+        )
+        translations = response.get("translations") or []
+        if len(translations) != len(batch):
+            raise RuntimeError("翻译服务返回的标题数量不完整")
+        with connect() as db:
+            for row, translation in zip(batch, translations):
+                title_zh = clean_text(str(translation.get("text") or ""), 220)
+                if not title_zh:
+                    continue
+                db.execute(
+                    "UPDATE content_items SET title_zh = ? WHERE id = ? AND title_zh = ''",
+                    (title_zh, int(row["id"])),
+                )
+                translated_count += 1
+    return translated_count
+
+
 def known_games(db: sqlite3.Connection) -> list[tuple[int, str, str]]:
     rows = db.execute("SELECT appid, name FROM games WHERE length(name) >= 4").fetchall()
     return sorted(
@@ -515,6 +603,10 @@ def store_items(source: sqlite3.Row, items: list[dict[str, Any]]) -> int:
                 ON CONFLICT(platform, external_id) DO UPDATE SET
                     source_id = excluded.source_id,
                     author = excluded.author,
+                    title_zh = CASE
+                        WHEN content_items.title = excluded.title THEN content_items.title_zh
+                        ELSE ''
+                    END,
                     title = excluded.title,
                     summary = excluded.summary,
                     url = excluded.url,
@@ -598,6 +690,12 @@ def sync_all_content() -> dict[str, Any]:
                         (status, message, source["id"]),
                     )
 
+        translated = 0
+        try:
+            translated = translate_pending_youtube_titles()
+        except Exception as error:
+            print(f"YouTube 标题翻译暂时跳过: {str(error)[:300]}")
+
         with connect() as db:
             cutoff = (now_local() - timedelta(days=90)).isoformat(timespec="seconds")
             db.execute("DELETE FROM content_items WHERE published_at < ?", (cutoff,))
@@ -609,7 +707,12 @@ def sync_all_content() -> dict[str, Any]:
                 """,
                 (iso_now(), "partial" if errors else "completed", seen, added, "; ".join(errors)[:500] or None, run_id),
             )
-        return {"status": "partial" if errors else "completed", "items_seen": seen, "items_added": added}
+        return {
+            "status": "partial" if errors else "completed",
+            "items_seen": seen,
+            "items_added": added,
+            "titles_translated": translated,
+        }
     except Exception as error:
         if run_id is not None:
             with connect() as db:
@@ -658,5 +761,6 @@ def get_content(limit: int = 160) -> dict[str, Any]:
         "youtube_configured": bool(os.environ.get("YOUTUBE_API_KEY", "").strip()),
         "youtube_regions": list(youtube_regions()),
         "youtube_trending_locator": YOUTUBE_TRENDING_LOCATOR,
+        "title_translation_configured": bool(os.environ.get("DEEPL_API_KEY", "").strip()),
         "tiktok_mode": "creator_authorization_required",
     }

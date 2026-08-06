@@ -20,6 +20,7 @@
 - ResetEra Gaming Headlines 公开 RSS
 - YouTube Data API Gaming 热门视频：美国、英国、法国、德国、意大利，按跨区覆盖与播放量发现近期话题（可选）
 - YouTube 指定频道上传列表，并同步公开视频的播放、点赞与评论数据（可选）
+- DeepL 标题翻译：只翻译新出现的 YouTube 标题并写入历史缓存，页面保留原标题（可选）
 
 完整游戏与 Demo 都会保留，DLC、工具和原声包会排除。每日历史连续积累 7 天后，页面会展示真实的 7 日在线与评价增长。
 
@@ -51,6 +52,7 @@ python3 export_static.py
 可选的 GitHub 配置：
 
 - Actions secret `YOUTUBE_API_KEY`：YouTube Data API 服务端密钥
+- Actions secret `DEEPL_API_KEY`：DeepL API Free 或 Pro 密钥，用于生成简体中文视频标题
 - Actions variable `SCOUTLINE_YOUTUBE_CHANNELS`：`显示名称|@handle,显示名称|UC频道ID`
 - Actions variable `SCOUTLINE_YOUTUBE_REGIONS`：热门视频地区，默认 `US,GB,FR,DE,IT`
 - Actions variable `SCOUTLINE_YOUTUBE_MAX_RESULTS`：每个地区和频道读取数量，默认 `20`，范围 `5-50`
@@ -63,6 +65,14 @@ python3 export_static.py
 4. 在 Actions 页面手动运行一次 `Update data and deploy Pages`。
 
 热门游戏视频只读取公开的 `videos.list` 榜单，不需要用户 OAuth。指定频道使用公开频道信息与上传列表，也不需要创作者授权。API Key 只在 GitHub Actions 采集过程中使用，不会进入 Pages 网页或公开 JSON。
+
+## YouTube 中文标题
+
+1. 在 DeepL 创建 API Free 账户并取得 API Key；Free 方案目前每月包含 50 万字符额度。
+2. 在 GitHub 仓库 `Settings > Secrets and variables > Actions > Secrets` 新建 `DEEPL_API_KEY`。
+3. 在 Actions 页面手动运行一次 `Update data and deploy Pages`。
+
+翻译在采集阶段批量完成，只处理尚无中文标题的新视频。译文保存在 Actions 的 SQLite 历史缓存中，后续每日更新不会重复翻译；翻译服务临时不可用时网站会回退到原标题，不影响 Steam 和 YouTube 数据发布。
 
 公开仓库若连续 60 天没有活动，GitHub 可能暂停定时工作流；手动运行或提交一次更新即可恢复。
 

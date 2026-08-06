@@ -295,6 +295,7 @@ let contentSources = [];
 let youtubeConfigured = false;
 let youtubeRegions = [];
 let youtubeTrendingLocator = "youtube:gaming-trending";
+let titleTranslationConfigured = false;
 let dataMode = "unknown";
 
 const storageKeys = {
@@ -1040,6 +1041,25 @@ function contentRegions(item) {
   return String(item.region_codes || "").split(",").map((value) => value.trim()).filter(Boolean);
 }
 
+const contentRegionDetails = {
+  US: ["美国", "美服参考"],
+  GB: ["英国", "美服参考"],
+  FR: ["法国", "法语服参考"],
+  DE: ["德国", "德语服参考"],
+  IT: ["意大利", "意大利语服参考"],
+};
+
+function regionFlag(code) {
+  return /^[A-Z]{2}$/.test(code)
+    ? String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt(0)))
+    : "";
+}
+
+function contentRegionBadge(code) {
+  const [name, server] = contentRegionDetails[code] || [code, "地区热度参考"];
+  return `<span class="intel-region-badge" title="${escapeHTML(`${name}热门 · ${server}`)}"><span aria-hidden="true">${regionFlag(code)}</span>${escapeHTML(code)}</span>`;
+}
+
 function contentHeatCompare(a, b) {
   const regionDifference = contentRegions(b).length - contentRegions(a).length;
   if (regionDifference) return regionDifference;
@@ -1069,6 +1089,11 @@ function renderContentSources() {
   const youtube = mergedSources.filter((source) => source.platform === "youtube");
   const youtubeTrending = youtube.find((source) => source.locator === youtubeTrendingLocator);
   const youtubeCreators = youtube.filter((source) => source.locator !== youtubeTrendingLocator);
+  const youtubeItems = contentItems.filter((item) => item.platform === "youtube");
+  const translatedItems = youtubeItems.filter((item) => String(item.title_zh || "").trim()).length;
+  const translationDetail = titleTranslationConfigured
+    ? `中文标题 ${translatedItems}/${youtubeItems.length}`
+    : "中文标题待配置";
   const tiktok = mergedSources.filter((source) => source.platform === "tiktok");
   const tiktokState = tiktok[0] || { status: "requires_auth" };
   const cards = [
@@ -1082,7 +1107,7 @@ function renderContentSources() {
       platform: "youtube",
       title: `YouTube 游戏热门 · ${youtubeRegions.length || 5} 区`,
       detail: youtubeConfigured
-        ? `官方 Data API · 每日更新${youtubeCreators.length ? ` · ${youtubeCreators.length} 个博主` : ""}`
+        ? `官方 Data API · ${translationDetail} · 每日更新${youtubeCreators.length ? ` · ${youtubeCreators.length} 个博主` : ""}`
         : `配置 API Key 后启用${youtubeCreators.length ? ` · 已保存 ${youtubeCreators.length} 个博主` : ""}`,
       state: sourceState(youtubeTrending || { status: youtubeConfigured ? "pending" : "needs_key" }),
     },
@@ -1106,7 +1131,7 @@ function getFilteredContent() {
   const filtered = contentItems.filter((item) => {
     if (state.intelPlatform !== "all" && item.platform !== state.intelPlatform) return false;
     if (state.intelNewOnly && !item.is_new_game) return false;
-    if (query && ![item.title, item.summary, item.author, item.source_name, item.matched_game].some((value) => String(value || "").toLowerCase().includes(query))) return false;
+    if (query && ![item.title_zh, item.title, item.summary, item.author, item.source_name, item.matched_game].some((value) => String(value || "").toLowerCase().includes(query))) return false;
     return true;
   });
   return filtered.sort(state.intelSort === "hot"
@@ -1120,17 +1145,25 @@ function renderContent() {
   const signalCount = contentItems.filter((item) => item.is_new_game).length;
   $("#intelFeed").innerHTML = filtered.map((item) => {
     const articleUrl = safeExternalUrl(item.url);
-    const sourceLabel = item.source_name || contentPlatformLabel(item.platform);
+    const sourceLabel = item.platform === "youtube"
+      ? (item.author || item.source_name || contentPlatformLabel(item.platform))
+      : (item.source_name || contentPlatformLabel(item.platform));
     const regions = contentRegions(item);
-    const summary = item.summary ? `<p>${escapeHTML(item.summary)}</p>` : "";
+    const translatedTitle = String(item.title_zh || "").trim();
+    const displayTitle = translatedTitle || item.title || "标题暂不可用";
+    const originalTitle = translatedTitle && translatedTitle !== item.title
+      ? `<div class="intel-original-title"><span>原标题</span><span>${escapeHTML(item.title)}</span></div>`
+      : "";
+    const summary = item.summary && item.platform !== "youtube" ? `<p>${escapeHTML(item.summary)}</p>` : "";
     const match = item.matched_appid
-      ? `<a class="intel-game-match" href="https://store.steampowered.com/app/${Number(item.matched_appid)}" target="_blank" rel="noreferrer"><i data-lucide="gamepad-2"></i>${escapeHTML(item.matched_game)}<i data-lucide="external-link"></i></a>`
+      ? `<a class="intel-game-match" href="https://store.steampowered.com/app/${Number(item.matched_appid)}" target="_blank" rel="noreferrer" title="关联 Steam 游戏"><i data-lucide="gamepad-2"></i>Steam 对应 · ${escapeHTML(item.matched_game)}<i data-lucide="external-link"></i></a>`
       : "";
     const thumbnail = item.thumbnail
       ? `<img class="intel-thumbnail" src="${escapeHTML(safeExternalUrl(item.thumbnail))}" alt="" loading="lazy" />`
       : `<span class="intel-source-mark ${escapeHTML(item.platform)}"><i data-lucide="${contentIcon(item.platform)}"></i></span>`;
+    const regionNames = regions.map((code) => (contentRegionDetails[code] || [code])[0]);
     const metrics = [
-      regions.length ? `<span class="intel-metric regions" title="热门地区：${escapeHTML(regions.join(" / "))}"><i data-lucide="globe-2"></i>${regions.length} 区热门</span>` : "",
+      regions.length ? `<span class="intel-region-list" aria-label="热门地区：${escapeHTML(regionNames.join("、"))}">${regions.map(contentRegionBadge).join("")}</span>` : "",
       Number(item.view_count) ? `<span class="intel-metric" title="播放量"><i data-lucide="eye"></i>${formatFollowers(Number(item.view_count))}</span>` : "",
       Number(item.like_count) ? `<span class="intel-metric" title="点赞数"><i data-lucide="thumbs-up"></i>${formatFollowers(Number(item.like_count))}</span>` : "",
       Number(item.comment_count) ? `<span class="intel-metric" title="评论数"><i data-lucide="message-circle"></i>${formatFollowers(Number(item.comment_count))}</span>` : "",
@@ -1140,7 +1173,8 @@ function renderContent() {
         ${thumbnail}
         <div class="intel-item-main">
           <div class="intel-item-meta"><span>${escapeHTML(contentPlatformLabel(item.platform))}</span><strong>${escapeHTML(sourceLabel)}</strong><time>${formatContentTime(item.published_at)}</time></div>
-          <a class="intel-item-title" href="${escapeHTML(articleUrl)}" target="_blank" rel="noreferrer">${escapeHTML(item.title)}<i data-lucide="external-link"></i></a>
+          <a class="intel-item-title" href="${escapeHTML(articleUrl)}" target="_blank" rel="noreferrer"><span>${escapeHTML(displayTitle)}</span><i data-lucide="external-link"></i></a>
+          ${originalTitle}
           ${summary}
           <div class="intel-item-signals">${metrics}${item.is_new_game ? '<span class="intel-signal"><i data-lucide="sparkles"></i>新游信号</span>' : ""}${match}</div>
         </div>
@@ -1179,6 +1213,7 @@ async function loadContentData({ waitIfRunning = true } = {}) {
     youtubeConfigured = Boolean(payload.youtube_configured);
     youtubeRegions = payload.youtube_regions || [];
     youtubeTrendingLocator = payload.youtube_trending_locator || youtubeTrendingLocator;
+    titleTranslationConfigured = Boolean(payload.title_translation_configured);
     if (payload.updated_at) $("#contentUpdatedTime").textContent = formatContentTime(payload.updated_at);
     renderContent();
     if (dataMode === "api" && payload.running && waitIfRunning) {

@@ -406,15 +406,21 @@ tbody tr:last-child td { border-bottom: 0; }
 .intel-item-meta strong { overflow: hidden; color: var(--ink-2); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .intel-item-meta time { margin-left: auto; white-space: nowrap; }
 .intel-item-title { width: fit-content; max-width: 100%; margin-top: 7px; display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 750; line-height: 1.35; text-decoration: none; }
+.intel-item-title > span { min-width: 0; }
 .intel-item-title:hover { color: var(--accent-dark); }
 .intel-item-title svg { width: 13px; min-width: 13px; color: var(--ink-3); }
+.intel-original-title { max-width: 100%; margin-top: 4px; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 8px; line-height: 1.4; }
+.intel-original-title > span:first-child { padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; flex: none; color: var(--ink-2); font-weight: 700; }
+.intel-original-title > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .intel-item-main > p { margin: 6px 0 0; overflow: hidden; color: var(--ink-2); display: -webkit-box; font-size: 10px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.intel-item-signals { min-height: 21px; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+.intel-item-signals { min-height: 21px; margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .intel-signal, .intel-game-match, .intel-metric { min-height: 21px; padding: 0 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 700; }
 .intel-signal { color: var(--amber); background: var(--amber-soft); }
 .intel-game-match { color: #315d82; background: #eaf1f7; text-decoration: none; }
 .intel-metric { color: var(--ink-2); background: #eef2f0; }
-.intel-metric.regions { color: #315d82; background: #eaf1f7; }
+.intel-region-list { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.intel-region-badge { min-width: 42px; min-height: 21px; padding: 0 6px; border: 1px solid #cddde8; border-radius: 4px; background: #edf4f8; color: #315d82; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 8px; font-weight: 750; }
+.intel-region-badge > span { font-size: 11px; line-height: 1; }
 .intel-signal svg, .intel-game-match svg, .intel-metric svg { width: 11px; }
 .intel-empty { min-height: 300px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .intel-empty > span { width: 40px; height: 40px; border-radius: 8px; background: #eef2f0; color: var(--ink-3); display: grid; place-items: center; }
