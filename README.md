@@ -22,7 +22,8 @@
 - YouTube Data API Gaming 热门视频：美国、英国、法国、德国、意大利，按跨区覆盖与播放量发现近期话题（可选）
 - YouTube 指定频道上传列表，并同步公开视频的播放、点赞与评论数据（可选）
 - DeepL 标题翻译：只翻译新出现的 YouTube 标题并写入历史缓存，页面保留原标题（可选）
-- TikTok 官方博主主页嵌入：预置飞书清单中的 27 位游戏博主，单次查看一位博主的最多 10 条近期视频
+- TikTok 轻量博主库：预置飞书清单中的 27 位游戏博主，每日缓存官方 oEmbed 基础资料，页面打开时不加载第三方组件
+- TikTok 官方主页预览：只在点击后加载单个博主的 Creator Profile Embed，不阻塞博主检索与线索查看
 - TikTok 视频收件箱：通过公开 oEmbed 识别视频作者、标题和封面，本地保存人工加入的视频与查看状态
 - TikTok 地区趋势：快速打开美国、法国、德国和意大利的 Creative Center 热门广告与热门话题
 
@@ -84,8 +85,9 @@ python3 export_static.py
 
 - `dist/data/games.json`：游戏、榜单、地区和趋势数据
 - `dist/data/content.json`：论坛与创作者资讯
+- `dist/data/tiktok-creators.json`：TikTok 博主目录、资料状态与按需预览数据
 - `dist/data/status.json`：最近采集时间与每日计划
 
 数据库路径可通过 `SCOUTLINE_DB_PATH` 指定。GitHub Actions 使用 `.cache/scoutline.db`，该目录与 `dist/` 都已加入 `.gitignore`。
 
-TikTok 博主主页与视频元数据使用官方公开嵌入能力，不需要 API 密钥。Creative Center 展示的是公开趋势与获授权的广告样本，不等同于完整自然流量榜单。
+TikTok 博主资料与视频元数据使用官方公开 oEmbed，不需要 API 密钥。默认页面只读取每日生成的静态 JSON；完整 Creator Profile Embed 仅在用户点击预览时加载。Creative Center 展示的是公开趋势与获授权的广告样本，不等同于完整自然流量榜单。

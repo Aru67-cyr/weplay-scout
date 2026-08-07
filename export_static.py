@@ -7,7 +7,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from content_collector import get_content, get_content_status, sync_all_content
+from content_collector import get_content, get_content_status, get_tiktok_creators, sync_all_content
 from steam_collector import DB_PATH, get_games, get_status, sync_all
 
 
@@ -69,6 +69,7 @@ def build(skip_sync: bool = False) -> None:
     checkpoint_database()
     games_payload = get_games()
     content_payload = get_content()
+    tiktok_creators_payload = get_tiktok_creators()
     steam_status = public_run_status(get_status())
     content_status = public_run_status(get_content_status())
     now = datetime.now().astimezone()
@@ -83,6 +84,7 @@ def build(skip_sync: bool = False) -> None:
 
     write_json(DIST / "data" / "games.json", games_payload)
     write_json(DIST / "data" / "content.json", content_payload)
+    write_json(DIST / "data" / "tiktok-creators.json", tiktok_creators_payload)
     write_json(
         DIST / "data" / "status.json",
         {

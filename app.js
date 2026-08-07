@@ -361,7 +361,7 @@ const state = {
   tiktokView: "creators",
   tiktokCreatorCategory: "all",
   tiktokCreatorQuery: "",
-  tiktokSelectedCreator: "gemgamingnetwork",
+  tiktokSelectedCreator: "furo_tv",
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -429,13 +429,15 @@ let localContentSources = readLocalJSON(storageKeys.contentSources, []);
 let localTikTokInbox = readLocalJSON(storageKeys.tiktokInbox, []);
 let tiktokInboxState = readLocalJSON(storageKeys.tiktokInboxState, {});
 let tiktokOembedCache = readLocalJSON(storageKeys.tiktokOembed, {});
+let tiktokCreatorProfiles = [];
+let tiktokCreatorsUpdatedAt = "";
 if (!Array.isArray(monitors)) monitors = [];
 if (!Array.isArray(localContentSources)) localContentSources = [];
 if (!Array.isArray(localTikTokInbox)) localTikTokInbox = [];
 if (!tiktokInboxState || typeof tiktokInboxState !== "object" || Array.isArray(tiktokInboxState)) tiktokInboxState = {};
 if (!tiktokOembedCache || typeof tiktokOembedCache !== "object" || Array.isArray(tiktokOembedCache)) tiktokOembedCache = {};
 const pendingTikTokOembeds = new Set();
-let embeddedTikTokHandle = "";
+let tiktokPreviewHandle = "";
 
 games = games.map((game) => ({
   ...game,
@@ -1193,7 +1195,14 @@ function tiktokProfileUrl(handle) {
 }
 
 function getTikTokCreators() {
-  const creators = [...tiktokCreatorDefaults];
+  const creators = tiktokCreatorProfiles.map((creator) => ({
+    ...creator,
+    handle: String(creator.handle || "").toLowerCase(),
+    locator: creator.locator || tiktokProfileUrl(creator.handle),
+  })).filter((creator) => creator.handle);
+  tiktokCreatorDefaults.forEach((creator) => {
+    if (!creators.some((item) => item.handle === creator.handle)) creators.push({ ...creator, status: "pending" });
+  });
   [...contentSources, ...localContentSources].filter((source) => source.platform === "tiktok").forEach((source) => {
     const handle = extractTikTokHandle(source.locator) || String(source.locator || "").replace(/^@/, "").toLowerCase();
     if (!handle || creators.some((creator) => creator.handle === handle)) return;
@@ -1207,6 +1216,32 @@ function getTikTokCreators() {
     });
   });
   return creators;
+}
+
+function tiktokCreatorRegionLabel(region) {
+  return {
+    US: "美服",
+    FR: "法语服",
+    DE: "德语服",
+    IT: "意大利语服",
+  }[String(region || "US").toUpperCase()] || String(region || "美服");
+}
+
+function tiktokCreatorStatus(creator) {
+  if (creator.status === "active") return ["资料已缓存", "active"];
+  if (creator.status === "stale") return ["使用上次资料", "stale"];
+  if (creator.status === "error") return ["主页暂不可达", "error"];
+  return ["等待资料同步", "pending"];
+}
+
+function tiktokCreatorInboxItems(creator) {
+  const handle = String(creator.handle || "").toLowerCase();
+  return getTikTokInboxItems().filter((item) => {
+    const serverItem = item.serverItem || {};
+    const cached = tiktokOembedCache[item.id] || {};
+    return [item.author, extractTikTokHandle(item.url), serverItem.author, cached.author_name]
+      .some((author) => String(author || "").replace(/^@/, "").toLowerCase() === handle);
+  });
 }
 
 function getTikTokInboxItems() {
@@ -1235,32 +1270,49 @@ function findTikTokMatchedGame(gameName) {
   return games.find((game) => String(game.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "") === normalized) || null;
 }
 
-function reloadTikTokEmbedScript() {
-  document.querySelector("script[data-weplay-tiktok-embed]")?.remove();
-  const script = document.createElement("script");
-  script.src = "https://www.tiktok.com/embed.js";
-  script.async = true;
-  script.dataset.weplayTiktokEmbed = "true";
-  document.body.appendChild(script);
+function tiktokEmbedDocument(embedMarkup) {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>html,body{margin:0;min-height:100%;background:#f5f7f6;font-family:Arial,sans-serif}body{padding:12px;box-sizing:border-box}.tiktok-embed{width:min(720px,100%)!important;margin:0 auto!important}</style></head><body>${embedMarkup}<script async src="https://www.tiktok.com/embed.js"></script></body></html>`;
+}
+
+function closeTikTokCreatorPreview() {
+  const preview = $("#tiktokCreatorPreview");
+  const host = $("#tiktokCreatorEmbed");
+  if (preview) preview.hidden = true;
+  if (host) {
+    host.replaceChildren();
+    delete host.dataset.handle;
+  }
+  tiktokPreviewHandle = "";
 }
 
 async function mountTikTokCreatorEmbed(creator) {
   const host = $("#tiktokCreatorEmbed");
-  if (!host || (embeddedTikTokHandle === creator.handle && host.dataset.handle === creator.handle)) return;
-  embeddedTikTokHandle = creator.handle;
+  const preview = $("#tiktokCreatorPreview");
+  if (!host || !preview || (tiktokPreviewHandle === creator.handle && host.dataset.handle === creator.handle)) return;
+  tiktokPreviewHandle = creator.handle;
   host.dataset.handle = creator.handle;
+  preview.hidden = false;
   host.innerHTML = `<div class="tiktok-embed-loading"><i data-lucide="loader-circle"></i><span>正在载入 @${escapeHTML(creator.handle)}</span></div>`;
   lucide.createIcons();
   try {
-    const endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(creator.locator)}`;
-    const response = await fetch(endpoint);
-    if (!response.ok) throw new Error(`TikTok oEmbed ${response.status}`);
-    const payload = await response.json();
+    let embedMarkup = String(creator.embed_html || "");
+    if (!embedMarkup) {
+      const endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(creator.locator)}`;
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error(`TikTok oEmbed ${response.status}`);
+      const payload = await response.json();
+      embedMarkup = String(payload.html || "").replace(/<script[\s\S]*?<\/script>/gi, "");
+    }
     if (host.dataset.handle !== creator.handle) return;
-    const embedMarkup = String(payload.html || "").replace(/<script[\s\S]*?<\/script>/gi, "");
-    host.innerHTML = embedMarkup || `<a class="tiktok-embed-fallback" href="${escapeHTML(creator.locator)}" target="_blank" rel="noreferrer">打开 @${escapeHTML(creator.handle)}</a>`;
-    $("#tiktokCreatorDisplayName").textContent = payload.author_name || `@${creator.handle}`;
-    reloadTikTokEmbedScript();
+    if (!embedMarkup) throw new Error("TikTok embed unavailable");
+    const frame = document.createElement("iframe");
+    frame.className = "tiktok-preview-frame";
+    frame.title = `@${creator.handle} TikTok 主页预览`;
+    frame.loading = "eager";
+    frame.referrerPolicy = "strict-origin-when-cross-origin";
+    frame.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox");
+    frame.srcdoc = tiktokEmbedDocument(embedMarkup);
+    host.replaceChildren(frame);
   } catch (error) {
     if (host.dataset.handle !== creator.handle) return;
     host.innerHTML = `<a class="tiktok-embed-fallback" href="${escapeHTML(creator.locator)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>在 TikTok 打开 @${escapeHTML(creator.handle)}</span></a>`;
@@ -1282,15 +1334,51 @@ function renderTikTokCreators() {
   $("#tiktokCreatorList").innerHTML = filtered.map((creator) => `
     <button class="tiktok-creator-row ${creator.handle === selected?.handle ? "active" : ""}" data-tiktok-creator="${escapeHTML(creator.handle)}" type="button">
       <span class="tiktok-creator-avatar">${escapeHTML(creator.handle.slice(0, 1).toUpperCase())}</span>
-      <span><strong>@${escapeHTML(creator.handle)}</strong><small>${escapeHTML(creator.category)} · ${escapeHTML(creator.region === "FR" ? "法语服" : "美服")}</small></span>
+      <span><strong>${escapeHTML(creator.name || `@${creator.handle}`)}</strong><small>@${escapeHTML(creator.handle)} · ${escapeHTML(creator.category)} · ${escapeHTML(tiktokCreatorRegionLabel(creator.region))}</small></span>
       <i data-lucide="chevron-right"></i>
     </button>`).join("") || '<div class="tiktok-list-empty">没有匹配的博主</div>';
 
   if (!selected) return;
-  $("#tiktokCreatorDisplayName").textContent = selected.name || `@${selected.handle}`;
-  $("#tiktokCreatorDisplayMeta").textContent = `${selected.category} · ${selected.region === "FR" ? "法语服" : "美服"}`;
-  $("#tiktokCreatorProfileLink").href = selected.locator;
-  mountTikTokCreatorEmbed(selected);
+  const knownVideos = tiktokCreatorInboxItems(selected);
+  const matchedGames = new Set(knownVideos.map((item) => item.game || item.serverItem?.matched_game).filter(Boolean));
+  const status = tiktokCreatorStatus(selected);
+  const updatedAt = selected.updated_at || tiktokCreatorsUpdatedAt;
+  const videoRows = knownVideos.slice(0, 5).map((item) => {
+    const cached = tiktokOembedCache[item.id] || {};
+    const serverItem = item.serverItem || {};
+    const title = serverItem.title_zh || item.game || serverItem.title || cached.title || "TikTok 视频线索";
+    const thumbnail = serverItem.thumbnail || cached.thumbnail_url;
+    const matchedGame = serverItem.matched_appid
+      ? games.find((game) => Number(game.id) === Number(serverItem.matched_appid))
+      : findTikTokMatchedGame(item.game);
+    return `<article class="tiktok-creator-video">
+      ${thumbnail ? `<img src="${escapeHTML(safeExternalUrl(thumbnail))}" alt="" loading="lazy" />` : '<span class="tiktok-video-placeholder"><i data-lucide="play"></i></span>'}
+      <div><a href="${escapeHTML(safeExternalUrl(item.url))}" target="_blank" rel="noreferrer">${escapeHTML(title)}</a><small>${item.published_at ? escapeHTML(formatContentTime(item.published_at)) : "已加入线索库"}${item.game ? ` · ${escapeHTML(item.game)}` : ""}</small></div>
+      ${matchedGame ? `<a class="tiktok-video-steam" href="${escapeHTML(steamUrl(matchedGame))}" target="_blank" rel="noreferrer" aria-label="在 Steam 打开 ${escapeHTML(matchedGame.title)}" title="在 Steam 打开"><i data-lucide="external-link"></i></a>` : ""}
+    </article>`;
+  }).join("");
+  $("#tiktokCreatorDetail").innerHTML = `
+    <div class="tiktok-profile-hero">
+      <span class="tiktok-profile-avatar">${escapeHTML(selected.handle.slice(0, 1).toUpperCase())}</span>
+      <div class="tiktok-profile-identity">
+        <strong>${escapeHTML(selected.name || `@${selected.handle}`)}</strong>
+        <span>@${escapeHTML(selected.handle)}</span>
+        <div><b>${escapeHTML(selected.category)}</b><b>${escapeHTML(tiktokCreatorRegionLabel(selected.region))}</b><em class="${status[1]}">${escapeHTML(status[0])}</em></div>
+      </div>
+      <div class="tiktok-profile-actions">
+        <button class="button compact secondary" data-tiktok-preview="${escapeHTML(selected.handle)}" type="button"><i data-lucide="eye"></i>预览主页</button>
+        <a class="button compact ghost" href="${escapeHTML(selected.locator)}" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i>打开 TikTok</a>
+      </div>
+    </div>
+    <div class="tiktok-profile-metrics">
+      <div><strong>${knownVideos.length}</strong><span>已收录视频</span></div>
+      <div><strong>${matchedGames.size}</strong><span>关联游戏</span></div>
+      <div><strong>${updatedAt ? escapeHTML(formatContentTime(updatedAt)) : "待同步"}</strong><span>资料更新时间</span></div>
+    </div>
+    <div class="tiktok-profile-video-section">
+      <div class="tiktok-profile-section-heading"><strong>近期已收录线索</strong><span>${knownVideos.length ? `展示最近 ${Math.min(5, knownVideos.length)} 条` : "等待加入视频线索"}</span></div>
+      <div class="tiktok-creator-videos">${videoRows || '<div class="tiktok-profile-empty"><i data-lucide="inbox"></i><span>目前还没有收录这位博主的视频</span></div>'}</div>
+    </div>`;
 }
 
 function renderTikTokInbox({ hydrate = true } = {}) {
@@ -1503,7 +1591,7 @@ function renderContentSources() {
     {
       platform: "tiktok",
       title: `TikTok 工作台 · ${tiktokCreators.length} 位 · ${counts.tiktok} 条`,
-      detail: "主页嵌入 · 视频收件箱 · 4 区趋势",
+      detail: "静态博主库 · 按需预览 · 4 区趋势",
       state: ["可用", "active"],
     },
   ];
@@ -1623,6 +1711,18 @@ async function loadContentData({ waitIfRunning = true } = {}) {
   } catch (error) {
     $("#intelFooterSummary").textContent = "资讯源暂时无法连接";
     renderContent();
+  }
+}
+
+async function loadTikTokCreatorData() {
+  try {
+    const payload = await fetchJSON("data/tiktok-creators.json", null);
+    tiktokCreatorProfiles = Array.isArray(payload.creators) ? payload.creators : [];
+    tiktokCreatorsUpdatedAt = payload.updated_at || "";
+    if (state.source === "intel" && state.intelPlatform === "tiktok") renderTikTokWorkspace();
+    else renderContentSources();
+  } catch (error) {
+    tiktokCreatorProfiles = [];
   }
 }
 
@@ -1790,14 +1890,26 @@ $("#tiktokWorkspace").addEventListener("click", (event) => {
   const modeButton = event.target.closest("[data-tiktok-mode]");
   if (modeButton) {
     state.tiktokView = modeButton.dataset.tiktokMode;
+    if (state.tiktokView !== "creators") closeTikTokCreatorPreview();
     renderTikTokWorkspace();
     return;
   }
   const creatorButton = event.target.closest("[data-tiktok-creator]");
   if (creatorButton) {
     state.tiktokSelectedCreator = creatorButton.dataset.tiktokCreator;
+    closeTikTokCreatorPreview();
     renderTikTokCreators();
     lucide.createIcons();
+    return;
+  }
+  const previewButton = event.target.closest("[data-tiktok-preview]");
+  if (previewButton) {
+    const creator = getTikTokCreators().find((item) => item.handle === previewButton.dataset.tiktokPreview);
+    if (creator) mountTikTokCreatorEmbed(creator);
+    return;
+  }
+  if (event.target.closest("[data-tiktok-preview-close]")) {
+    closeTikTokCreatorPreview();
     return;
   }
   const readButton = event.target.closest("[data-tiktok-read]");
@@ -2108,10 +2220,10 @@ $("#creatorModal").addEventListener("click", (event) => {
 $("#creatorPlatform").addEventListener("change", (event) => {
   const tiktok = event.target.value === "tiktok";
   $("#creatorHelp").textContent = tiktok
-    ? "添加 TikTok 博主主页后，可直接查看其官方主页嵌入与近期视频。"
+    ? "添加 TikTok 博主主页后，可在轻量观察名单中管理，并按需打开官方主页预览。"
     : "添加 YouTube 频道主页或频道 ID，先保存在当前浏览器的关注名单。";
   $("#creatorNote").innerHTML = tiktok
-    ? '<i data-lucide="panel-top"></i><span>使用 TikTok 官方 Creator Profile Embed；无需 API 密钥，关注名单保存在当前浏览器。</span>'
+    ? '<i data-lucide="database"></i><span>观察名单保存在当前浏览器；主页资料每日缓存，官方预览只在点击后加载。</span>'
     : '<i data-lucide="key-round"></i><span>云端自动采集使用 GitHub Actions 机密配置，密钥不会出现在网页中。</span>';
   $("#creatorForm [name='locator']").placeholder = tiktok
     ? "https://tiktok.com/@用户名"
@@ -2219,3 +2331,4 @@ renderRows();
 lucide.createIcons();
 bootstrapData();
 loadContentData();
+loadTikTokCreatorData();

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="面向 Steam 的新游榜单发现与线索管理工作台" />
     <title>Scoutline - 新游线索工作台</title>
-    <link rel="stylesheet" href="styles.css?v=20260807a" />
+    <link rel="stylesheet" href="styles.css?v=20260807b" />
   </head>
   <body>
     <div class="app-shell">
@@ -331,7 +331,7 @@
             <div class="source-status-strip" id="contentSourceStrip">
               <button class="source-status-item active" data-intel-platform="forum" type="button"><span class="source-status-icon forum"><i data-lucide="messages-square"></i></span><span><strong>ResetEra 游戏头条</strong><small>正在连接公开 RSS</small></span><b class="source-state pending">连接中</b></button>
               <button class="source-status-item" data-intel-platform="youtube" type="button"><span class="source-status-icon youtube"><i data-lucide="youtube"></i></span><span><strong>YouTube 游戏热门</strong><small>配置 API Key 后监控欧美热门视频</small></span><b class="source-state pending">待配置</b></button>
-              <button class="source-status-item" data-intel-platform="tiktok" type="button"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 工作台</strong><small>主页嵌入 · 视频收件箱 · 地区趋势</small></span><b class="source-state active">可用</b></button>
+              <button class="source-status-item" data-intel-platform="tiktok" type="button"><span class="source-status-icon tiktok"><i data-lucide="music-2"></i></span><span><strong>TikTok 工作台</strong><small>静态博主库 · 视频收件箱 · 地区趋势</small></span><b class="source-state active">可用</b></button>
             </div>
 
             <div class="tiktok-workspace" id="tiktokWorkspace" hidden>
@@ -351,12 +351,15 @@
                     </div>
                     <div class="tiktok-creator-list" id="tiktokCreatorList"></div>
                   </aside>
-                  <div class="tiktok-embed-panel">
-                    <div class="tiktok-embed-heading">
-                      <div><strong id="tiktokCreatorDisplayName">TikTok 博主</strong><small id="tiktokCreatorDisplayMeta">主页嵌入</small></div>
-                      <a class="button compact ghost" id="tiktokCreatorProfileLink" href="https://www.tiktok.com" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>打开主页</span></a>
-                    </div>
-                    <div class="tiktok-creator-embed" id="tiktokCreatorEmbed"></div>
+                  <div class="tiktok-creator-panel">
+                    <section class="tiktok-creator-detail" id="tiktokCreatorDetail" aria-live="polite"></section>
+                    <section class="tiktok-creator-preview" id="tiktokCreatorPreview" hidden>
+                      <div class="tiktok-preview-heading">
+                        <div><strong>官方主页预览</strong><small>由 TikTok 提供，首次打开可能需要片刻</small></div>
+                        <button class="icon-button" data-tiktok-preview-close type="button" aria-label="关闭主页预览" title="关闭主页预览"><i data-lucide="x"></i></button>
+                      </div>
+                      <div class="tiktok-creator-embed" id="tiktokCreatorEmbed"></div>
+                    </section>
                   </div>
                 </div>
               </section>
@@ -436,6 +439,6 @@
 
     <div class="toast-region" id="toastRegion" aria-live="polite"></div>
     <script src="assets/lucide.min.js"></script>
-    <script src="app.js?v=20260807a"></script>
+    <script src="app.js?v=20260807b"></script>
   </body>
 </html>

@@ -10,6 +10,7 @@ import threading
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -31,6 +32,8 @@ YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 YOUTUBE_TRENDING_LOCATOR = "youtube:gaming-trending"
 DEEPL_FREE_API_BASE = "https://api-free.deepl.com"
 DEEPL_PRO_API_BASE = "https://api.deepl.com"
+TIKTOK_OEMBED_API = "https://www.tiktok.com/oembed"
+TIKTOK_CREATORS_PATH = ROOT / "tiktok_creators.json"
 DEFAULT_YOUTUBE_REGIONS = ("US", "GB", "FR", "DE", "IT")
 CONTENT_SYNC_LOCK = threading.Lock()
 NEW_GAME_TERMS = re.compile(
@@ -119,6 +122,17 @@ def init_content_db() -> None:
                 items_seen INTEGER NOT NULL DEFAULT 0,
                 items_added INTEGER NOT NULL DEFAULT 0,
                 error TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS tiktok_creator_profiles (
+                handle TEXT PRIMARY KEY,
+                author_name TEXT NOT NULL DEFAULT '',
+                author_url TEXT NOT NULL DEFAULT '',
+                title TEXT NOT NULL DEFAULT '',
+                embed_html TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                fetched_at TEXT,
+                last_error TEXT
             );
             """
         )
@@ -221,7 +235,12 @@ def add_content_source(platform: str, name: str, locator: str) -> dict[str, Any]
     return dict(row)
 
 
-def http_bytes(url: str, retries: int = 2, headers: dict[str, str] | None = None) -> bytes:
+def http_bytes(
+    url: str,
+    retries: int = 2,
+    headers: dict[str, str] | None = None,
+    timeout: int = 25,
+) -> bytes:
     request_headers = {
         "User-Agent": USER_AGENT,
         "Accept": "application/rss+xml,application/xml,application/json,text/xml,*/*",
@@ -235,7 +254,7 @@ def http_bytes(url: str, retries: int = 2, headers: dict[str, str] | None = None
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            with urllib.request.urlopen(request, timeout=25) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 return response.read()
         except Exception as error:
             last_error = error
@@ -244,10 +263,112 @@ def http_bytes(url: str, retries: int = 2, headers: dict[str, str] | None = None
     raise RuntimeError(f"资讯源请求失败: {last_error}")
 
 
-def http_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
+def http_json(
+    url: str,
+    params: dict[str, Any],
+    retries: int = 2,
+    timeout: int = 25,
+) -> dict[str, Any]:
     separator = "&" if "?" in url else "?"
-    payload = http_bytes(f"{url}{separator}{urllib.parse.urlencode(params)}")
+    payload = http_bytes(
+        f"{url}{separator}{urllib.parse.urlencode(params)}",
+        retries=retries,
+        timeout=timeout,
+    )
     return json.loads(payload.decode("utf-8"))
+
+
+def tiktok_creator_config() -> list[dict[str, str]]:
+    payload = json.loads(TIKTOK_CREATORS_PATH.read_text(encoding="utf-8"))
+    creators: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for entry in payload:
+        handle = str(entry.get("handle") or "").strip().lstrip("@").lower()
+        if not re.fullmatch(r"[a-z0-9._]+", handle) or handle in seen:
+            continue
+        seen.add(handle)
+        creators.append(
+            {
+                "handle": handle,
+                "category": clean_text(str(entry.get("category") or "英语游戏"), 40),
+                "region": clean_text(str(entry.get("region") or "US"), 8).upper(),
+                "locator": f"https://www.tiktok.com/@{handle}",
+            }
+        )
+    return creators
+
+
+def fetch_tiktok_creator_profile(creator: dict[str, str]) -> dict[str, str]:
+    payload = http_json(
+        TIKTOK_OEMBED_API,
+        {"url": creator["locator"]},
+        retries=0,
+        timeout=12,
+    )
+    embed_html = re.sub(r"<script[\s\S]*?</script>", "", str(payload.get("html") or ""), flags=re.IGNORECASE)
+    if not embed_html.strip():
+        raise RuntimeError("TikTok 未返回主页嵌入资料")
+    return {
+        "handle": creator["handle"],
+        "author_name": clean_text(str(payload.get("author_name") or ""), 120),
+        "author_url": clean_text(str(payload.get("author_url") or creator["locator"]), 500),
+        "title": clean_text(str(payload.get("title") or ""), 220),
+        "embed_html": embed_html[:24000],
+    }
+
+
+def sync_tiktok_creator_profiles(max_workers: int = 4) -> dict[str, int]:
+    init_content_db()
+    creators = tiktok_creator_config()
+    completed: list[dict[str, str]] = []
+    failed: list[tuple[str, str]] = []
+    with ThreadPoolExecutor(max_workers=max(1, min(8, max_workers))) as executor:
+        futures = {executor.submit(fetch_tiktok_creator_profile, creator): creator for creator in creators}
+        for future in as_completed(futures):
+            creator = futures[future]
+            try:
+                completed.append(future.result())
+            except Exception as error:
+                failed.append((creator["handle"], str(error)[:300]))
+
+    fetched_at = iso_now()
+    with connect() as db:
+        for profile in completed:
+            db.execute(
+                """
+                INSERT INTO tiktok_creator_profiles(
+                    handle, author_name, author_url, title, embed_html, status, fetched_at, last_error
+                ) VALUES (?, ?, ?, ?, ?, 'active', ?, NULL)
+                ON CONFLICT(handle) DO UPDATE SET
+                    author_name = excluded.author_name,
+                    author_url = excluded.author_url,
+                    title = excluded.title,
+                    embed_html = excluded.embed_html,
+                    status = 'active',
+                    fetched_at = excluded.fetched_at,
+                    last_error = NULL
+                """,
+                (
+                    profile["handle"],
+                    profile["author_name"],
+                    profile["author_url"],
+                    profile["title"],
+                    profile["embed_html"],
+                    fetched_at,
+                ),
+            )
+        for handle, error in failed:
+            db.execute(
+                """
+                INSERT INTO tiktok_creator_profiles(handle, status, last_error)
+                VALUES (?, 'error', ?)
+                ON CONFLICT(handle) DO UPDATE SET
+                    status = CASE WHEN tiktok_creator_profiles.embed_html <> '' THEN 'stale' ELSE 'error' END,
+                    last_error = excluded.last_error
+                """,
+                (handle, error),
+            )
+    return {"total": len(creators), "updated": len(completed), "failed": len(failed)}
 
 
 def http_post_json(
@@ -690,6 +811,12 @@ def sync_all_content() -> dict[str, Any]:
                         (status, message, source["id"]),
                     )
 
+        tiktok_creators = {"total": 0, "updated": 0, "failed": 0}
+        try:
+            tiktok_creators = sync_tiktok_creator_profiles()
+        except Exception as error:
+            print(f"TikTok 博主资料暂时跳过: {str(error)[:300]}")
+
         translated = 0
         try:
             translated = translate_pending_youtube_titles()
@@ -712,6 +839,7 @@ def sync_all_content() -> dict[str, Any]:
             "items_seen": seen,
             "items_added": added,
             "titles_translated": translated,
+            "tiktok_creators": tiktok_creators,
         }
     except Exception as error:
         if run_id is not None:
@@ -735,6 +863,71 @@ def get_content_status() -> dict[str, Any]:
     payload = dict(latest) if latest else {"status": "never_run"}
     payload["last_success_at"] = success["completed_at"] if success else None
     return payload
+
+
+def get_tiktok_creators() -> dict[str, Any]:
+    init_content_db()
+    configured = tiktok_creator_config()
+    with connect() as db:
+        profiles = {
+            row["handle"]: dict(row)
+            for row in db.execute("SELECT * FROM tiktok_creator_profiles ORDER BY handle")
+        }
+        custom_sources = [
+            dict(row)
+            for row in db.execute(
+                "SELECT * FROM content_sources WHERE platform = 'tiktok' AND enabled = 1 ORDER BY name"
+            )
+        ]
+
+    creators: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for creator in configured:
+        handle = creator["handle"]
+        profile = profiles.get(handle, {})
+        creators.append(
+            {
+                **creator,
+                "name": profile.get("author_name") or f"@{handle}",
+                "title": profile.get("title") or "",
+                "author_url": profile.get("author_url") or creator["locator"],
+                "embed_html": profile.get("embed_html") or "",
+                "status": profile.get("status") or "pending",
+                "updated_at": profile.get("fetched_at"),
+                "seeded": True,
+            }
+        )
+        seen.add(handle)
+
+    for source in custom_sources:
+        handle = str(source.get("locator") or "").strip().lstrip("@").lower()
+        if not re.fullmatch(r"[a-z0-9._]+", handle) or handle in seen:
+            continue
+        profile = profiles.get(handle, {})
+        locator = f"https://www.tiktok.com/@{handle}"
+        creators.append(
+            {
+                "handle": handle,
+                "category": "我的关注",
+                "region": "US",
+                "locator": locator,
+                "name": profile.get("author_name") or source.get("name") or f"@{handle}",
+                "title": profile.get("title") or "",
+                "author_url": profile.get("author_url") or locator,
+                "embed_html": profile.get("embed_html") or "",
+                "status": profile.get("status") or source.get("status") or "pending",
+                "updated_at": profile.get("fetched_at"),
+                "seeded": False,
+            }
+        )
+        seen.add(handle)
+
+    updated_values = [creator["updated_at"] for creator in creators if creator.get("updated_at")]
+    return {
+        "creators": creators,
+        "updated_at": max(updated_values) if updated_values else None,
+        "source": "tiktok_oembed",
+    }
 
 
 def get_content(limit: int = 160) -> dict[str, Any]:
@@ -762,5 +955,5 @@ def get_content(limit: int = 160) -> dict[str, Any]:
         "youtube_regions": list(youtube_regions()),
         "youtube_trending_locator": YOUTUBE_TRENDING_LOCATOR,
         "title_translation_configured": bool(os.environ.get("DEEPL_API_KEY", "").strip()),
-        "tiktok_mode": "public_embed_and_manual_inbox",
+        "tiktok_mode": "cached_creator_directory_and_manual_inbox",
     }
