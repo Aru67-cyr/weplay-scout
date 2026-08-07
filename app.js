@@ -395,6 +395,7 @@ let youtubeRegions = [];
 let youtubeTrendingLocator = "youtube:gaming-trending";
 let titleTranslationConfigured = false;
 let dataMode = "unknown";
+let dataIsStale = false;
 
 const storageKeys = {
   gameState: "weplay-scout-game-state-v1",
@@ -451,7 +452,7 @@ function persistGame(game) {
 
 function setStaticModeUI() {
   if (dataMode !== "static") return;
-  $("#scheduleText").textContent = "GitHub Actions 每天 03:00 更新";
+  $("#scheduleText").textContent = dataIsStale ? "计划每天 03:17 · 当前待补更" : "GitHub Actions 每天 03:17 更新";
   $("#syncButton span").textContent = "刷新数据";
   $("#contentSyncButton span").textContent = "刷新资讯";
 }
@@ -1679,6 +1680,46 @@ function setDataStatus(label, healthy = true) {
   $("#statusText").innerHTML = `<i class="status-dot ${healthy ? "" : "pending"}"></i>${label}`;
 }
 
+function singaporeDateParts(date) {
+  return Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+}
+
+function isDailyDataStale(updated, now = new Date()) {
+  if (Number.isNaN(updated.getTime())) return true;
+  const current = singaporeDateParts(now);
+  const snapshot = singaporeDateParts(updated);
+  const currentDay = `${current.year}-${current.month}-${current.day}`;
+  const snapshotDay = `${snapshot.year}-${snapshot.month}-${snapshot.day}`;
+  const minutesNow = Number(current.hour) * 60 + Number(current.minute);
+  const age = now.getTime() - updated.getTime();
+  return age > 30 * 60 * 60 * 1000 || (minutesNow >= 5 * 60 && currentDay !== snapshotDay);
+}
+
+function updateDataFreshness(updated) {
+  dataIsStale = isDailyDataStale(updated);
+  const formatted = updated.toLocaleString("zh-CN", {
+    timeZone: "Asia/Singapore",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const alert = $("#dataFreshnessAlert");
+  alert.hidden = !dataIsStale;
+  $("#dataFreshnessMessage").textContent = `当前显示 ${formatted} 快照 · 计划每天 03:17 更新`;
+  $("#notificationSyncTitle").textContent = dataIsStale ? "今日 Steam 数据尚未更新" : "Steam 数据同步完成";
+  $("#scheduleText").textContent = dataIsStale ? "计划每天 03:17 · 当前待补更" : "GitHub Actions 每天 03:17 更新";
+}
+
 async function loadRealData() {
   const payload = await fetchJSON("data/games.json", "/api/games");
   if (!payload.games?.length) return false;
@@ -1689,13 +1730,13 @@ async function loadRealData() {
   hasPreviousSnapshot = Boolean(payload.has_previous_snapshot);
   dataHistoryDays = Number(payload.history_days || 0);
   const updated = payload.updated_at ? new Date(payload.updated_at) : new Date();
+  updateDataFreshness(updated);
   $("#updatedTime").textContent = updated.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
   $("#notificationSyncTime").textContent = updated.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
   $("#notificationGameCount").textContent = games.length;
-  $("#scheduleText").textContent = dataMode === "static" ? "GitHub Actions 每天 03:00 更新" : "每天 03:00 自动同步";
   $("#sourceHealth").textContent = `${payload.source_count || 0}/${payload.source_expected || 24}`;
   $("#accountSourceHealth").textContent = `${payload.source_count || 0}/${payload.source_expected || 24}`;
-  setDataStatus(`Steam 数据已同步 · ${games.length} 款`);
+  setDataStatus(dataIsStale ? `今日数据待补更 · ${games.length} 款为上期快照` : `Steam 数据已同步 · ${games.length} 款`, !dataIsStale);
   if ((payload.history_days || 0) < 7 && state.board === "trending" && state.source === "all") {
     $("#boardDescription").textContent = `真实 7 日趋势正在积累（${Math.max(1, payload.history_days || 1)}/7 天），当前按新游身份、区服覆盖、国家覆盖与最佳排名排序。`;
   }
@@ -1727,7 +1768,11 @@ async function bootstrapData() {
       return;
     }
     if (loaded) {
-      setDataStatus(dataMode === "static" ? `每日公开数据可用 · ${games.length} 款` : (status.sync_due ? "今日数据待补更" : `Steam 数据已同步 · ${games.length} 款`), dataMode === "static" || !status.sync_due);
+      const syncDue = dataIsStale || (dataMode === "api" && status.sync_due);
+      const label = dataIsStale
+        ? `今日数据待补更 · ${games.length} 款为上期快照`
+        : (dataMode === "static" ? `每日公开数据可用 · ${games.length} 款` : (status.sync_due ? "今日数据待补更" : `Steam 数据已同步 · ${games.length} 款`));
+      setDataStatus(label, !syncDue);
       return;
     }
     setDataStatus("等待首次同步", false);
@@ -1958,7 +2003,7 @@ $("#syncButton").addEventListener("click", async () => {
   try {
     if (dataMode === "static") {
       await Promise.all([loadRealData(), loadContentData({ waitIfRunning: false })]);
-      showToast("已刷新公开数据；云端每天 03:00 自动采集");
+      showToast("已刷新公开数据；云端每天 03:17 自动采集");
       return;
     }
     const response = await fetch("/api/sync", { method: "POST" });
@@ -2029,7 +2074,7 @@ $("#contentSyncButton").addEventListener("click", async () => {
   try {
     if (dataMode === "static") {
       await loadContentData({ waitIfRunning: false });
-      showToast("已刷新资讯；云端每天 03:00 自动更新");
+      showToast("已刷新资讯；云端每天 03:17 自动更新");
       return;
     }
     const response = await fetch("/api/content/sync", { method: "POST" });

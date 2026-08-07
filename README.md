@@ -5,7 +5,7 @@
 ## 运行方式
 
 - GitHub Pages 托管 `index.html`、`app.js`、`styles.css` 与 `data/*.json`
-- GitHub Actions 每天新加坡时间 `03:00` 运行采集并重新发布
+- GitHub Actions 每天新加坡时间 `03:17` 运行采集并重新发布
 - 推送功能代码时只使用最近的缓存数据发布界面，不会重复调用 Steam、YouTube 或翻译接口
 - SQLite 只作为 Actions 的历史缓存，不会进入公开网站产物
 - 收藏、待跟进、监控规则与本地添加的创作者保存在浏览器 `localStorage`

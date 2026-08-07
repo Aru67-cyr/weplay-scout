@@ -34,7 +34,7 @@ def write_json(path: Path, payload: object) -> None:
 
 
 def next_daily_run(now: datetime) -> datetime:
-    target = now.replace(hour=3, minute=0, second=0, microsecond=0)
+    target = now.replace(hour=3, minute=17, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
     return target
@@ -91,6 +91,7 @@ def build(skip_sync: bool = False) -> None:
             "sync_due": False,
             "schedule": "daily",
             "schedule_hour": 3,
+            "schedule_minute": 17,
             "timezone": "Asia/Singapore",
             "next_sync_at": next_daily_run(now).isoformat(timespec="seconds"),
             "generated_at": now.isoformat(timespec="seconds"),

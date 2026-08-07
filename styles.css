@@ -81,6 +81,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .global-search input::placeholder { color: #96a09c; }
 kbd { padding: 2px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; background: #fff; color: var(--ink-3); font: 10px inherit; white-space: nowrap; }
 .top-actions { position: relative; justify-self: end; display: flex; align-items: center; gap: 10px; }
+.data-freshness-alert { min-height: 38px; margin: 0 28px 14px; padding: 8px 12px; border: 1px solid #e7c98e; border-radius: 6px; background: #fff8e8; color: #765516; display: flex; align-items: center; gap: 8px; font-size: 10px; }
+.data-freshness-alert[hidden] { display: none; }
+.data-freshness-alert svg { width: 15px; flex: 0 0 auto; }
+.data-freshness-alert strong { color: #63430c; font-size: 10px; }
+.data-freshness-alert span { color: #86682d; }
 .icon-button { position: relative; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: #fff; display: grid; place-items: center; cursor: pointer; }
 .icon-button:hover { background: var(--surface-muted); border-color: var(--line-strong); }
 .icon-button svg { width: 16px; }
@@ -715,6 +720,8 @@ tbody tr:last-child td { border-bottom: 0; }
   .intel-item-title { font-size: 11px; }
   .intel-item-main > p { -webkit-line-clamp: 1; font-size: 9px; }
   .intel-item-signals { flex-wrap: wrap; }
+  .data-freshness-alert { margin: 0 12px 10px; align-items: flex-start; flex-wrap: wrap; }
+  .data-freshness-alert span { flex-basis: calc(100% - 23px); margin-left: 23px; }
   .tiktok-modebar { padding: 8px; gap: 4px; }
   .tiktok-modebar button { min-width: 0; flex: 1; grid-template-columns: 18px minmax(0, 1fr); padding: 0 7px; }
   .tiktok-modebar button b { display: none; }

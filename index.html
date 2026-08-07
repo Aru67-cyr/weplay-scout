@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="面向 Steam 的新游榜单发现与线索管理工作台" />
     <title>Scoutline - 新游线索工作台</title>
-    <link rel="stylesheet" href="styles.css?v=20260806f" />
+    <link rel="stylesheet" href="styles.css?v=20260807a" />
   </head>
   <body>
     <div class="app-shell">
@@ -71,7 +71,7 @@
             <span id="sourceHealth">0/15</span>
           </div>
           <div class="status-track"><span></span></div>
-          <small id="scheduleText">GitHub Actions 每天 03:00 更新</small>
+          <small id="scheduleText">GitHub Actions 每天 03:17 更新</small>
         </div>
       </aside>
 
@@ -91,7 +91,7 @@
             <button class="avatar-button" id="accountButton" type="button" aria-label="账户菜单" aria-expanded="false" aria-controls="accountMenu"><span>YW</span><i data-lucide="chevron-down"></i></button>
             <div class="top-popover notification-menu" id="notificationMenu" hidden>
               <div class="popover-heading"><strong>通知</strong><span>每日同步</span></div>
-              <div class="notification-item"><span class="notice-icon"><i data-lucide="circle-check"></i></span><span><strong>Steam 数据同步完成</strong><small id="notificationSyncTime">等待同步时间</small></span></div>
+              <div class="notification-item"><span class="notice-icon"><i data-lucide="circle-check"></i></span><span><strong id="notificationSyncTitle">Steam 数据同步完成</strong><small id="notificationSyncTime">等待同步时间</small></span></div>
               <div class="notification-item"><span class="notice-icon"><i data-lucide="tags"></i></span><span><strong>类型榜单已更新</strong><small><b id="notificationGameCount">0</b> 款游戏已入库</small></span></div>
               <button class="popover-action" data-top-action="categories" type="button"><i data-lucide="tags"></i>查看类型榜单</button>
             </div>
@@ -117,6 +117,12 @@
               <button class="button secondary" id="syncButton" type="button"><i data-lucide="refresh-cw"></i><span>同步榜单</span></button>
               <button class="button primary" id="createMonitorButton" type="button"><i data-lucide="plus"></i><span>新建监控</span></button>
             </div>
+          </div>
+
+          <div class="data-freshness-alert" id="dataFreshnessAlert" role="status" hidden>
+            <i data-lucide="triangle-alert"></i>
+            <strong>今日数据尚未更新</strong>
+            <span id="dataFreshnessMessage">当前显示上一期快照</span>
           </div>
 
           <section class="metrics-band" id="metricsBand" aria-label="今日概览">
@@ -430,6 +436,6 @@
 
     <div class="toast-region" id="toastRegion" aria-live="polite"></div>
     <script src="assets/lucide.min.js"></script>
-    <script src="app.js?v=20260806f"></script>
+    <script src="app.js?v=20260807a"></script>
   </body>
 </html>
